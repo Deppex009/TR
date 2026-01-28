@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ server_name }} - Depex Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%); min-height: 100vh; color: #fff; }
+        .header { background: rgba(255, 255, 255, 0.05); padding: 20px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: sticky; top: 0; z-index: 1000; backdrop-filter: blur(10px); }
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+        .header-content { display: flex; justify-content: space-between; align-items: center; }
+        .logo { display: flex; align-items: center; gap: 15px; font-size: 1.5rem; font-weight: 700; }
+        .header-actions { display: flex; gap: 15px; }
+        .back-btn, .logout-btn { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); padding: 10px 20px; border-radius: 10px; cursor: pointer; text-decoration: none; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; }
+        .back-btn:hover, .logout-btn:hover { background: rgba(255, 255, 255, 0.2); }
+        .main { padding: 40px 20px; }
+        .server-header { text-align: center; margin-bottom: 30px; }
+        .server-title { font-size: 2.5rem; margin-bottom: 10px; }
+        .server-subtitle { color: rgba(255, 255, 255, 0.6); font-size: 1.1rem; }
+        .tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 40px; flex-wrap: wrap; }
+        .tab { background: rgba(255, 255, 255, 0.05); border: 2px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); padding: 12px 30px; border-radius: 12px; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 10px; font-weight: 600; }
+        .tab:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); }
+        .tab.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-color: transparent; color: #fff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .settings-grid { display: grid; grid-template-columns: 1fr; gap: 25px; max-width: 900px; margin: 0 auto; }
+        .setting-card { background: rgba(255, 255, 255, 0.05); border: 2px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 30px; transition: all 0.3s ease; }
+        .setting-card:hover { border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.07); transform: translateY(-3px); }
+        .setting-header { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
+        .setting-icon { width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .setting-title { font-size: 1.6rem; font-weight: 700; }
+        .setting-desc { color: rgba(255, 255, 255, 0.6); font-size: 0.95rem; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .setting-group { margin-bottom: 25px; }
+        .setting-group-title { font-size: 1.1rem; font-weight: 600; color: #667eea; margin-bottom: 15px; padding-left: 10px; border-left: 3px solid #667eea; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: rgba(255, 255, 255, 0.8); font-size: 0.95rem; }
+        input[type="text"], input[type="color"] { width: 100%; padding: 12px 16px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; background: rgba(0, 0, 0, 0.3); color: #fff; font-size: 1rem; margin-bottom: 15px; transition: all 0.3s ease; }
+        input[type="text"]:focus, input[type="color"]:focus { outline: none; border-color: #667eea; background: rgba(0, 0, 0, 0.4); }
+        input[type="checkbox"] { margin-right: 10px; width: 18px; height: 18px; cursor: pointer; }
+        .checkbox-label { display: flex; align-items: center; margin-bottom: 15px; cursor: pointer; }
+        .save-btn { width: 100%; padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 20px; }
+        .save-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4); }
+        .ticket-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+        .toast { position: fixed; bottom: -100px; right: 30px; background: rgba(46, 204, 113, 0.95); padding: 20px 30px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); transition: all 0.4s ease; z-index: 10000; display: flex; align-items: center; gap: 15px; }
+        .toast.show { bottom: 30px; }
+        .toast.error { background: rgba(231, 76, 60, 0.95); }
+        @media (max-width: 768px) { .tabs { flex-direction: column; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo"><i class="fas fa-robot"></i> Depex Dashboard</div>
+                <div class="header-actions">
+                    <a href="/select-server" class="back-btn"><i class="fas fa-arrow-left"></i> Back</a>
+                    <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="container">
+            <div class="server-header">
+                <h1 class="server-title">{{ server_name }}</h1>
+                <p class="server-subtitle">Configure your bot settings</p>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('poems')"><i class="fas fa-scroll"></i> Poems</div>
+                <div class="tab" onclick="switchTab('tickets')"><i class="fas fa-ticket-alt"></i> Tickets</div>
+                <div class="tab" onclick="switchTab('moderation')"><i class="fas fa-shield-alt"></i> Moderation</div>
+                <div class="tab" onclick="switchTab('general')"><i class="fas fa-cog"></i> General</div>
+            </div>
+
+            <!-- POEMS TAB -->
+            <div id="poems-tab" class="tab-content active">
+                <div class="settings-grid">
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <div class="setting-icon"><i class="fas fa-scroll"></i></div>
+                            <div class="setting-title">Poem Settings</div>
+                        </div>
+                        <p class="setting-desc">Configure all poem-related settings in one place</p>
+                        
+                        <div class="setting-group">
+                            <div class="setting-group-title">Channel Configuration</div>
+                            <label>Poem Channel ID</label>
+                            <input type="text" id="poem-channel" placeholder="1460729566908911790" value="{{ config.poem_channel or '' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Embed Appearance</div>
+                            <label>Embed Color</label>
+                            <input type="color" id="embed-color-picker" value="{{ config.embed_color or '#9B59B6' }}" style="height: 50px; margin-bottom: 10px;">
+                            <input type="text" id="embed-color" placeholder="#9B59B6" value="{{ config.embed_color or '#9B59B6' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Image Settings</div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="show-image" {{ 'checked' if config.show_image else '' }}>
+                                Show Images in Poems
+                            </label>
+                            <label>Image URL</label>
+                            <input type="text" id="image-url" placeholder="https://cdn.discordapp.com/..." value="{{ config.image_url or '' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Auto Reactions</div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="auto-react" {{ 'checked' if config.auto_react else '' }}>
+                                Enable Auto React
+                            </label>
+                            <label>Reaction Emojis (comma separated)</label>
+                            <input type="text" id="react-emojis" placeholder="❤️,🔥,👍" value="{{ ','.join(config.react_emojis) if config.react_emojis else '❤️,🔥' }}">
+                        </div>
+
+                        <button class="save-btn" onclick="saveAllPoems()">
+                            <i class="fas fa-save"></i> Save All Poem Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TICKETS TAB -->
+            <div id="tickets-tab" class="tab-content">
+                <div class="settings-grid">
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <div class="setting-icon"><i class="fas fa-ticket-alt"></i></div>
+                            <div class="setting-title">Ticket System</div>
+                        </div>
+                        <p class="setting-desc">Configure all ticket system settings</p>
+                        
+                        <div class="setting-group">
+                            <div class="setting-group-title">Basic Configuration</div>
+                            <label>Category ID</label>
+                            <input type="text" id="ticket-category" placeholder="1234567890" value="{{ config.tickets.category_id if config.tickets and config.tickets.category_id else '' }}">
+                            <label>Log Channel ID</label>
+                            <input type="text" id="ticket-log" placeholder="1234567890" value="{{ config.tickets.log_channel_id if config.tickets and config.tickets.log_channel_id else '' }}">
+                            <label>Admin Role ID</label>
+                            <input type="text" id="ticket-admin" placeholder="1234567890" value="{{ config.tickets.admin_role_id if config.tickets and config.tickets.admin_role_id else '' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Panel Settings</div>
+                            <label>Panel Title</label>
+                            <input type="text" id="panel-title" placeholder="YOUR TITLE HERE" value="{{ config.tickets.panel_title if config.tickets else '' }}">
+                            <label>Panel Description</label>
+                            <input type="text" id="panel-description" placeholder="YOUR DESCRIPTION HERE" value="{{ config.tickets.panel_description if config.tickets else '' }}">
+                            <label>Panel Image URL</label>
+                            <input type="text" id="panel-image" placeholder="https://..." value="{{ config.tickets.panel_image if config.tickets else '' }}">
+                            <label>Panel Author Name</label>
+                            <input type="text" id="panel-author-name" placeholder="YOUR NAME HERE" value="{{ config.tickets.panel_author_name if config.tickets else '' }}">
+                            <label>Panel Author Icon URL</label>
+                            <input type="text" id="panel-author-icon" placeholder="https://..." value="{{ config.tickets.panel_author_icon if config.tickets else '' }}">
+                            <label>Embed Color</label>
+                            <input type="color" id="ticket-embed-color-picker" value="#{{ config.tickets.embed_color if config.tickets and config.tickets.embed_color else 'FFD700' }}" style="height: 50px; margin-bottom: 10px;">
+                            <input type="text" id="ticket-embed-color" placeholder="FFD700" value="{{ config.tickets.embed_color if config.tickets else 'FFD700' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Dropdown Settings</div>
+                            <label>Dropdown Placeholder</label>
+                            <input type="text" id="dropdown-placeholder" placeholder="إضغط لفتح التكيت" value="{{ config.tickets.dropdown_placeholder if config.tickets else '' }}">
+                            <label>Menu Placeholder</label>
+                            <input type="text" id="menu-placeholder" placeholder="تحديل التكيت" value="{{ config.tickets.menu_placeholder if config.tickets else '' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Ticket Messages</div>
+                            <label>Ticket Created Title</label>
+                            <input type="text" id="ticket-created-title" placeholder="TICKET OPENED" value="{{ config.tickets.messages.ticket_created_title if config.tickets and config.tickets.messages else '' }}">
+                            <label>Ticket Created Description</label>
+                            <input type="text" id="ticket-created-desc" placeholder="YOUR MESSAGE HERE" value="{{ config.tickets.messages.ticket_created_desc if config.tickets and config.tickets.messages else '' }}">
+                            <label>Modal Title</label>
+                            <input type="text" id="modal-title" placeholder="MODAL TITLE HERE" value="{{ config.tickets.messages.modal_title if config.tickets and config.tickets.messages else '' }}">
+                            <label>Modal Placeholder</label>
+                            <input type="text" id="modal-placeholder" placeholder="TYPE REASON HERE..." value="{{ config.tickets.messages.modal_placeholder if config.tickets and config.tickets.messages else '' }}">
+                            <label>Reason Label</label>
+                            <input type="text" id="reason-label" placeholder="REASON:" value="{{ config.tickets.messages.reason_label if config.tickets and config.tickets.messages else '' }}">
+                            <label>Footer Text</label>
+                            <input type="text" id="footer-text" placeholder="YOUR FOOTER • Today at" value="{{ config.tickets.messages.footer_text if config.tickets and config.tickets.messages else '' }}">
+                            <label>Claim Message</label>
+                            <input type="text" id="claim-message" placeholder="@USER استدعى الإدارة" value="{{ config.tickets.messages.claim_message if config.tickets and config.tickets.messages else '' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Button Settings</div>
+                            <label>Close Button Text</label>
+                            <input type="text" id="btn-close" placeholder="CLOSE" value="{{ config.tickets.buttons.close if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Close Button Emoji</label>
+                            <input type="text" id="btn-close-emoji" placeholder="🔒" value="{{ config.tickets.buttons.close_emoji if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Claim Button Text</label>
+                            <input type="text" id="btn-claim" placeholder="CLAIM" value="{{ config.tickets.buttons.claim if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Claim Button Emoji</label>
+                            <input type="text" id="btn-claim-emoji" placeholder="👥" value="{{ config.tickets.buttons.claim_emoji if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Rename Button Text</label>
+                            <input type="text" id="btn-rename" placeholder="RENAME" value="{{ config.tickets.buttons.rename if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Add User Button Text</label>
+                            <input type="text" id="btn-add-user" placeholder="ADD USER" value="{{ config.tickets.buttons.add_user if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Remove User Button Text</label>
+                            <input type="text" id="btn-remove-user" placeholder="REMOVE USER" value="{{ config.tickets.buttons.remove_user if config.tickets and config.tickets.buttons else '' }}">
+                        </div>
+                        
+                        <button class="save-btn" onclick="saveTickets()">
+                            <i class="fas fa-save"></i> Save All Ticket Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODERATION TAB -->
+            <div id="moderation-tab" class="tab-content">
+                <div class="settings-grid">
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <div class="setting-icon"><i class="fas fa-shield-alt"></i></div>
+                            <div class="setting-title">Moderation System</div>
+                        </div>
+                        <p class="setting-desc">Configure moderation commands and messages</p>
+                        
+                        <div class="setting-group">
+                            <div class="setting-group-title">Basic Settings</div>
+                            <label>Moderation Log Channel ID</label>
+                            <input type="text" id="mod-log-channel" placeholder="1234567890" value="{{ config.moderation.mod_log_channel if config.moderation and config.moderation.mod_log_channel else '' }}">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="dm-on-action" {{ 'checked' if config.moderation and config.moderation.dm_on_action else '' }}>
+                                Send DM to users on moderation actions
+                            </label>
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">DM Messages (Use {server}, {reason}, {duration})</div>
+                            <label>Ban DM Message</label>
+                            <input type="text" id="ban-dm-msg" placeholder="You have been banned from {server}. Reason: {reason}" value="{{ config.moderation.messages.ban_dm if config.moderation and config.moderation.messages else '' }}">
+                            <label>Kick DM Message</label>
+                            <input type="text" id="kick-dm-msg" placeholder="You have been kicked from {server}. Reason: {reason}" value="{{ config.moderation.messages.kick_dm if config.moderation and config.moderation.messages else '' }}">
+                            <label>Warn DM Message</label>
+                            <input type="text" id="warn-dm-msg" placeholder="You have been warned in {server}. Reason: {reason}" value="{{ config.moderation.messages.warn_dm if config.moderation and config.moderation.messages else '' }}">
+                            <label>Timeout DM Message</label>
+                            <input type="text" id="timeout-dm-msg" placeholder="You have been timed out. Duration: {duration}. Reason: {reason}" value="{{ config.moderation.messages.timeout_dm if config.moderation and config.moderation.messages else '' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Log Messages</div>
+                            <label>Ban Log Title</label>
+                            <input type="text" id="ban-log-msg" placeholder="🔨 **User Banned**" value="{{ config.moderation.messages.ban_log if config.moderation and config.moderation.messages else '' }}">
+                            <label>Kick Log Title</label>
+                            <input type="text" id="kick-log-msg" placeholder="👢 **User Kicked**" value="{{ config.moderation.messages.kick_log if config.moderation and config.moderation.messages else '' }}">
+                            <label>Warn Log Title</label>
+                            <input type="text" id="warn-log-msg" placeholder="⚠️ **User Warned**" value="{{ config.moderation.messages.warn_log if config.moderation and config.moderation.messages else '' }}">
+                            <label>Timeout Log Title</label>
+                            <input type="text" id="timeout-log-msg" placeholder="⏱️ **User Timed Out**" value="{{ config.moderation.messages.timeout_log if config.moderation and config.moderation.messages else '' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Action Shortcuts</div>
+                            <label>Ban Shortcut</label>
+                            <input type="text" id="ban-shortcut" placeholder="b" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'ban' %}{{ k }}{% endif %}{% endfor %}">
+                            <label>Kick Shortcut</label>
+                            <input type="text" id="kick-shortcut" placeholder="k" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'kick' %}{{ k }}{% endif %}{% endfor %}">
+                            <label>Warn Shortcut</label>
+                            <input type="text" id="warn-shortcut" placeholder="w" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'warn' %}{{ k }}{% endif %}{% endfor %}">
+                            <label>Timeout Shortcut</label>
+                            <input type="text" id="timeout-shortcut" placeholder="t" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'timeout' %}{{ k }}{% endif %}{% endfor %}">
+                            <p style="color: rgba(255,255,255,0.5); font-size: 0.85rem; margin-top: 5px;">
+                                Usage: Type shortcut + mention + reason (e.g., "b @user spam" to ban)
+                            </p>
+                            
+                            <div class="setting-group-title" style="margin-top: 20px;">Delete Message Shortcuts</div>
+                            <label>Delete Shortcuts (Format: shortcut:amount, e.g., "m:5, d:10")</label>
+                            <input type="text" id="delete-shortcuts" placeholder="m:5, d:10, clear:20" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'delete' %}{{ k }}:{{ v.default_amount }}{% if not loop.last %}, {% endif %}{% endif %}{% endfor %}">
+                            <p style="color: rgba(255,255,255,0.5); font-size: 0.85rem; margin-top: 5px;">
+                                Usage: Type "m10" to delete 10 messages
+                            </p>
+                        </div>
+                        
+                        <button class="save-btn" onclick="saveMod()">
+                            <i class="fas fa-save"></i> Save Moderation Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GENERAL TAB -->
+            <div id="general-tab" class="tab-content">
+                <div class="settings-grid">
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <div class="setting-icon"><i class="fas fa-info-circle"></i></div>
+                            <div class="setting-title">Server Information</div>
+                        </div>
+                        <p class="setting-desc">Server: <strong>{{ server_name }}</strong></p>
+                        <p class="setting-desc">Server ID: <strong>{{ server_id }}</strong></p>
+                        <p class="setting-desc" style="margin-top: 20px;">All settings are saved per server. Each Discord server has independent configuration.</p>
+                        <p class="setting-desc" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                            <strong>Dashboard by Depex</strong><br>© 2026 - Multi-Server Support with Discord OAuth
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toast-message">Success!</span>
+    </div>
+
+    <script>
+        const serverId = '{{ server_id }}';
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+            event.target.closest('.tab').classList.add('active');
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            toastMessage.textContent = message;
+            toast.classList.toggle('error', isError);
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        async function saveAllPoems() {
+            const data = {
+                poem_channel: document.getElementById('poem-channel').value || null,
+                embed_color: document.getElementById('embed-color').value,
+                show_image: document.getElementById('show-image').checked,
+                image_url: document.getElementById('image-url').value,
+                auto_react: document.getElementById('auto-react').checked,
+                react_emojis: document.getElementById('react-emojis').value.split(',').map(e => e.trim()).filter(e => e)
+            };
+
+            try {
+                const response = await fetch(`/api/config/${serverId}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                showToast(result.message, !result.success);
+            } catch (error) {
+                showToast('Error: ' + error.message, true);
+            }
+        }
+
+        async function saveTickets() {
+            const data = {
+                tickets: {
+                    category_id: document.getElementById('ticket-category').value || null,
+                    log_channel_id: document.getElementById('ticket-log').value || null,
+                    admin_role_id: document.getElementById('ticket-admin').value || null,
+                    panel_title: document.getElementById('panel-title').value,
+                    panel_description: document.getElementById('panel-description').value,
+                    panel_image: document.getElementById('panel-image').value,
+                    panel_author_name: document.getElementById('panel-author-name').value,
+                    panel_author_icon: document.getElementById('panel-author-icon').value,
+                    embed_color: document.getElementById('ticket-embed-color').value,
+                    dropdown_placeholder: document.getElementById('dropdown-placeholder').value,
+                    menu_placeholder: document.getElementById('menu-placeholder').value,
+                    messages: {
+                        ticket_created_title: document.getElementById('ticket-created-title').value,
+                        ticket_created_desc: document.getElementById('ticket-created-desc').value,
+                        modal_title: document.getElementById('modal-title').value,
+                        modal_placeholder: document.getElementById('modal-placeholder').value,
+                        reason_label: document.getElementById('reason-label').value,
+                        footer_text: document.getElementById('footer-text').value,
+                        claim_message: document.getElementById('claim-message').value
+                    },
+                    buttons: {
+                        close: document.getElementById('btn-close').value,
+                        close_emoji: document.getElementById('btn-close-emoji').value,
+                        claim: document.getElementById('btn-claim').value,
+                        claim_emoji: document.getElementById('btn-claim-emoji').value,
+                        rename: document.getElementById('btn-rename').value,
+                        add_user: document.getElementById('btn-add-user').value,
+                        remove_user: document.getElementById('btn-remove-user').value
+                    }
+                }
+            };
+
+            try {
+                const response = await fetch(`/api/config/${serverId}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                showToast(result.message, !result.success);
+            } catch (error) {
+                showToast('Error: ' + error.message, true);
+            }
+        }
+
+        async function saveMod() {
+            const shortcuts = {};
+            
+            // Add action shortcuts
+            const banShortcut = document.getElementById('ban-shortcut').value.trim();
+            if (banShortcut) {
+                shortcuts[banShortcut] = { action: 'ban', command: 'ban' };
+            }
+            
+            const kickShortcut = document.getElementById('kick-shortcut').value.trim();
+            if (kickShortcut) {
+                shortcuts[kickShortcut] = { action: 'kick', command: 'kick' };
+            }
+            
+            const warnShortcut = document.getElementById('warn-shortcut').value.trim();
+            if (warnShortcut) {
+                shortcuts[warnShortcut] = { action: 'warn', command: 'warn' };
+            }
+            
+            const timeoutShortcut = document.getElementById('timeout-shortcut').value.trim();
+            if (timeoutShortcut) {
+                shortcuts[timeoutShortcut] = { action: 'timeout', command: 'timeout' };
+            }
+            
+            // Add delete shortcuts
+            const deleteShortcutsInput = document.getElementById('delete-shortcuts').value;
+            if (deleteShortcutsInput) {
+                const pairs = deleteShortcutsInput.split(',').map(s => s.trim());
+                pairs.forEach(pair => {
+                    const [key, amount] = pair.split(':').map(s => s.trim());
+                    if (key && amount) {
+                        shortcuts[key] = {
+                            action: 'delete',
+                            default_amount: parseInt(amount) || 5
+                        };
+                    }
+                });
+            }
+
+            const data = {
+                moderation: {
+                    mod_log_channel: document.getElementById('mod-log-channel').value || null,
+                    dm_on_action: document.getElementById('dm-on-action').checked,
+                    shortcuts: shortcuts,
+                    messages: {
+                        ban_dm: document.getElementById('ban-dm-msg').value || 'You have been banned from {server}. Reason: {reason}',
+                        kick_dm: document.getElementById('kick-dm-msg').value || 'You have been kicked from {server}. Reason: {reason}',
+                        warn_dm: document.getElementById('warn-dm-msg').value || 'You have been warned in {server}. Reason: {reason}',
+                        timeout_dm: document.getElementById('timeout-dm-msg').value || 'You have been timed out in {server}. Duration: {duration}. Reason: {reason}',
+                        ban_log: document.getElementById('ban-log-msg').value || '🔨 **User Banned**',
+                        kick_log: document.getElementById('kick-log-msg').value || '👢 **User Kicked**',
+                        warn_log: document.getElementById('warn-log-msg').value || '⚠️ **User Warned**',
+                        timeout_log: document.getElementById('timeout-log-msg').value || '⏱️ **User Timed Out**'
+                    }
+                }
+            };
+
+            try {
+                const response = await fetch(`/api/config/${serverId}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                showToast(result.message, !result.success);
+            } catch (error) {
+                showToast('Error: ' + error.message, true);
+            }
+        }
+
+        document.getElementById('embed-color-picker').addEventListener('input', (e) => {
+            document.getElementById('embed-color').value = e.target.value;
+        });
+
+        document.getElementById('embed-color').addEventListener('input', (e) => {
+            if (e.target.value.startsWith('#') && e.target.value.length === 7) {
+                document.getElementById('embed-color-picker').value = e.target.value;
+            }
+        });
+
+        document.getElementById('ticket-embed-color-picker').addEventListener('input', (e) => {
+            document.getElementById('ticket-embed-color').value = e.target.value.substring(1);
+        });
+
+        document.getElementById('ticket-embed-color').addEventListener('input', (e) => {
+            let color = e.target.value.replace('#', '');
+            if (color.length === 6) {
+                document.getElementById('ticket-embed-color-picker').value = '#' + color;
+            }
+        });
+    </script>
+</body>
+</html>

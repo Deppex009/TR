@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depex Dashboard - Bot Control Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="background-animation"></div>
+    
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-robot"></i>
+                    <h1>Depex Dashboard</h1>
+                </div>
+                <div class="header-info">
+                    <span class="status-badge">
+                        <i class="fas fa-circle pulse"></i>
+                        Bot Active
+                    </span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            
+            <!-- Welcome Card -->
+            <div class="welcome-card">
+                <div class="welcome-icon">
+                    <i class="fas fa-crown"></i>
+                </div>
+                <div class="welcome-text">
+                    <h2>Welcome to Your Dashboard</h2>
+                    <p>Control your Discord bot with ease. Made by <strong>Depex</strong></p>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon purple">
+                        <i class="fas fa-cog"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3>Settings</h3>
+                        <p>Configure Bot</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3>Customize</h3>
+                        <p>Colors & Themes</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon pink">
+                        <i class="fas fa-ticket-alt"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3>Tickets</h3>
+                        <p>Manage System</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3>Status</h3>
+                        <p>All Systems Go</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Settings Section -->
+            <div class="main-settings">
+                
+                <!-- Poem Channel Card -->
+                <div class="setting-card">
+                    <div class="setting-icon">
+                        <i class="fas fa-hashtag"></i>
+                    </div>
+                    <h3 class="setting-title">Poem Channel</h3>
+                    <p class="setting-desc">Set the channel where poems will be posted</p>
+                    <div class="setting-content">
+                        <label>Channel ID</label>
+                        <input type="text" id="poem-channel" class="input-field" 
+                               placeholder="1460729566908911790" 
+                               value="{{ config.poem_channel or '' }}">
+                        <button class="save-btn" onclick="updatePoemChannel()">
+                            <i class="fas fa-save"></i> Save Channel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Embed Color Card -->
+                <div class="setting-card">
+                    <div class="setting-icon color-icon">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                    <h3 class="setting-title">Embed Color</h3>
+                    <p class="setting-desc">Customize your embed color</p>
+                    <div class="setting-content">
+                        <label>Color</label>
+                        <div class="color-input-group">
+                            <input type="color" id="color-picker" class="color-picker-input" 
+                                   value="#9B59B6">
+                            <input type="text" id="embed-color" class="input-field color-text-input" 
+                                   placeholder="#a639ff" 
+                                   value="{{ config.embed_color or '#9B59B6' }}">
+                        </div>
+                        <div class="preview-box" id="color-preview">
+                            <span>Preview</span>
+                        </div>
+                        <button class="save-btn" onclick="updateColor()">
+                            <i class="fas fa-save"></i> Save Color
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Poem Images Card -->
+                <div class="setting-card">
+                    <div class="setting-icon image-icon">
+                        <i class="fas fa-image"></i>
+                    </div>
+                    <h3 class="setting-title">Poem Images</h3>
+                    <p class="setting-desc">Configure image display settings</p>
+                    <div class="setting-content">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-image" class="checkbox-input" 
+                                   {{ 'checked' if config.show_image else '' }}>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-text">Show Images</span>
+                        </label>
+                        <label>Image URL</label>
+                        <input type="text" id="image-url" class="input-field" 
+                               placeholder="https://cdn.discordapp.com/..." 
+                               value="{{ config.image_url or '' }}">
+                        <button class="save-btn" onclick="updateImage()">
+                            <i class="fas fa-save"></i> Save Image Settings
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Auto Reactions Card -->
+                <div class="setting-card">
+                    <div class="setting-icon heart-icon">
+                        <i class="fas fa-heart"></i>
+                    </div>
+                    <h3 class="setting-title">Auto Reactions</h3>
+                    <p class="setting-desc">Automatically react to poem messages</p>
+                    <div class="setting-content">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="auto-react" class="checkbox-input" 
+                                   {{ 'checked' if config.auto_react else '' }}>
+                            <span class="checkbox-custom"></span>
+                            <span class="checkbox-text">Enable Auto React</span>
+                        </label>
+                        <label>Reaction Emojis (comma separated)</label>
+                        <input type="text" id="react-emojis" class="input-field" 
+                               placeholder="<:TR18:1460442618528792>" 
+                               value="{{ ','.join(config.react_emojis) if config.react_emojis else '❤️,🔥' }}">
+                        <button class="save-btn" onclick="updateReactions()">
+                            <i class="fas fa-save"></i> Save Reactions
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ticket System Card -->
+                <div class="setting-card ticket-card">
+                    <div class="setting-icon ticket-icon">
+                        <i class="fas fa-ticket-alt"></i>
+                    </div>
+                    <h3 class="setting-title">Ticket System</h3>
+                    <p class="setting-desc">Configure ticket system settings</p>
+                    <div class="setting-content">
+                        <div class="ticket-inputs">
+                            <div>
+                                <label>Category ID</label>
+                                <input type="text" id="ticket-category" class="input-field" 
+                                       placeholder="1234567890" 
+                                       value="{{ config.tickets.category_id if config.tickets and config.tickets.category_id else '' }}">
+                            </div>
+                            <div>
+                                <label>Log Channel ID</label>
+                                <input type="text" id="ticket-log" class="input-field" 
+                                       placeholder="1234567890" 
+                                       value="{{ config.tickets.log_channel_id if config.tickets and config.tickets.log_channel_id else '' }}">
+                            </div>
+                            <div>
+                                <label>Admin Role ID</label>
+                                <input type="text" id="ticket-admin" class="input-field" 
+                                       placeholder="1234567890" 
+                                       value="{{ config.tickets.admin_role_id if config.tickets and config.tickets.admin_role_id else '' }}">
+                            </div>
+                        </div>
+                        <button class="save-btn" onclick="updateTicket()">
+                            <i class="fas fa-save"></i> Save Ticket Settings
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>
+                <i class="fas fa-code"></i> 
+                Made with <i class="fas fa-heart pulse-heart"></i> by <strong>Depex</strong> © 2026
+            </p>
+            <p class="footer-links">
+                <a href="#"><i class="fab fa-github"></i></a>
+                <a href="#"><i class="fab fa-discord"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <div class="toast-content">
+            <i class="toast-icon fas fa-check-circle"></i>
+            <span class="toast-message">Success!</span>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}?v=2"></script>
+</body>
+</html>
