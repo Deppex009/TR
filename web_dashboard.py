@@ -157,19 +157,10 @@ def callback():
         return redirect(url_for('select_server'))
         
     except Exception as e:
-        print(f"OAuth error: {e}")
-        # Fallback to mock for testing
-        session['user'] = {
-            'id': '123456789',
-            'username': 'TestUser',
-            'discriminator': '0',
-            'avatar': None
-        }
-        session['guilds'] = [
-            {'id': '1111111111', 'name': 'Test Server 1', 'icon': None},
-            {'id': '2222222222', 'name': 'Test Server 2', 'icon': None}
-        ]
-        return redirect(url_for('select_server'))
+        logger.error(f"OAuth error: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"<h1>OAuth Error</h1><pre>{str(e)}</pre><p><a href='/'>Go back</a></p>"
 
 @app.route('/select-server')
 @login_required
