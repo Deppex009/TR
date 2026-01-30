@@ -13,8 +13,8 @@
         .header-content { display: flex; justify-content: space-between; align-items: center; }
         .logo { display: flex; align-items: center; gap: 15px; font-size: 1.5rem; font-weight: 700; }
         .header-actions { display: flex; gap: 15px; }
-        .back-btn, .logout-btn { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); padding: 10px 20px; border-radius: 10px; cursor: pointer; text-decoration: none; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; }
-        .back-btn:hover, .logout-btn:hover { background: rgba(255, 255, 255, 0.2); }
+        .back-btn, .logout-btn, .lang-btn { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2); padding: 10px 20px; border-radius: 10px; cursor: pointer; text-decoration: none; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; }
+        .back-btn:hover, .logout-btn:hover, .lang-btn:hover { background: rgba(255, 255, 255, 0.2); }
         .main { padding: 40px 20px; }
         .server-header { text-align: center; margin-bottom: 30px; }
         .server-title { font-size: 2.5rem; margin-bottom: 10px; }
@@ -52,10 +52,11 @@
     <div class="header">
         <div class="container">
             <div class="header-content">
-                <div class="logo"><i class="fas fa-robot"></i> Depex Dashboard</div>
+                <div class="logo"><i class="fas fa-robot"></i> <span data-en="Depex Dashboard" data-ar="لوحة تحكم ديبكس">Depex Dashboard</span></div>
                 <div class="header-actions">
-                    <a href="/select-server" class="back-btn"><i class="fas fa-arrow-left"></i> Back</a>
-                    <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                    <button class="lang-btn" onclick="toggleLanguage()"><i class="fas fa-language"></i> <span id="lang-text">العربية</span></button>
+                    <a href="/select-server" class="back-btn"><i class="fas fa-arrow-left"></i> <span data-en="Back" data-ar="رجوع">Back</span></a>
+                    <a href="/logout" class="logout-btn"><i class="fas fa-sign-out-alt"></i> <span data-en="Logout" data-ar="تسجيل الخروج">Logout</span></a>
                 </div>
             </div>
         </div>
@@ -65,14 +66,14 @@
         <div class="container">
             <div class="server-header">
                 <h1 class="server-title">{{ server_name }}</h1>
-                <p class="server-subtitle">Configure your bot settings</p>
+                <p class="server-subtitle" data-en="Configure your bot settings" data-ar="قم بتكوين إعدادات البوت">Configure your bot settings</p>
             </div>
 
             <div class="tabs">
-                <div class="tab active" onclick="switchTab('poems')"><i class="fas fa-scroll"></i> Poems</div>
-                <div class="tab" onclick="switchTab('tickets')"><i class="fas fa-ticket-alt"></i> Tickets</div>
-                <div class="tab" onclick="switchTab('moderation')"><i class="fas fa-shield-alt"></i> Moderation</div>
-                <div class="tab" onclick="switchTab('general')"><i class="fas fa-cog"></i> General</div>
+                <div class="tab active" onclick="switchTab('poems')"><i class="fas fa-scroll"></i> <span data-en="Poems" data-ar="القصائد">Poems</span></div>
+                <div class="tab" onclick="switchTab('tickets')"><i class="fas fa-ticket-alt"></i> <span data-en="Tickets" data-ar="التذاكر">Tickets</span></div>
+                <div class="tab" onclick="switchTab('moderation')"><i class="fas fa-shield-alt"></i> <span data-en="Moderation" data-ar="الإدارة">Moderation</span></div>
+                <div class="tab" onclick="switchTab('general')"><i class="fas fa-cog"></i> <span data-en="General" data-ar="عام">General</span></div>
             </div>
 
             <!-- POEMS TAB -->
@@ -491,6 +492,32 @@
                 document.getElementById('ticket-embed-color-picker').value = '#' + color;
             }
         });
+
+        // Language switcher functionality
+        let currentLang = localStorage.getItem('language') || 'en';
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'en' ? 'ar' : 'en';
+            localStorage.setItem('language', currentLang);
+            updateLanguage();
+        }
+
+        function updateLanguage() {
+            document.querySelectorAll('[data-en]').forEach(element => {
+                const text = currentLang === 'en' ? element.getAttribute('data-en') : element.getAttribute('data-ar');
+                element.textContent = text;
+            });
+
+            const langText = document.getElementById('lang-text');
+            if (langText) {
+                langText.textContent = currentLang === 'en' ? 'العربية' : 'English';
+            }
+
+            document.body.style.direction = currentLang === 'ar' ? 'rtl' : 'ltr';
+        }
+
+        // Apply language on page load
+        window.addEventListener('DOMContentLoaded', updateLanguage);
     </script>
 </body>
 </html>
