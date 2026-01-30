@@ -18,7 +18,7 @@ DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "1460760802138128567")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "VqoJHnxc2d-xdZbns5HTI_MgOGEtvSdn")
 DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://localhost:5000/callback")
 DISCORD_API_BASE = "https://discord.com/api/v10"
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "MTQ2MDc2MDgwMjEzODEyODU2Nw.GVZIuP.yQMn2DtjGW9CESuLo2qo_Vk2peCj3LrF174gMg")
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 def load_config():
     """Load multi-server configuration"""

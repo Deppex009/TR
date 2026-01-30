@@ -4,6 +4,10 @@ from discord import app_commands
 import json
 import os
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -3025,6 +3029,6 @@ async def mod_setup(interaction: discord.Interaction):
 
 # Run the bot
 try:
-    bot.run("MTQ2MDc2MDgwMjEzODEyODU2Nw.GVZIuP.yQMn2DtjGW9CESuLo2qo_Vk2peCj3LrF174gMg")
+    bot.run(os.getenv("DISCORD_BOT_TOKEN"))
 except Exception as e:
     logger.error(f"Bot error: {e}", exc_info=True)
