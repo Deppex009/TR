@@ -60,6 +60,53 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
+        .lang-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            margin-right: 15px;
+        }
+
+        .lang-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .add-bot-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            margin: 20px auto;
+            text-align: center;
+        }
+
+        .add-bot-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .button-container {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
         .main {
             padding: 60px 20px;
         }
@@ -145,19 +192,30 @@
             <div class="header-content">
                 <div class="logo">
                     <i class="fas fa-robot"></i>
-                    Depex Dashboard
+                    <span data-en="Depex Dashboard" data-ar="لوحة تحكم ديبكس">Depex Dashboard</span>
                 </div>
-                <a href="/logout" class="logout-btn">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
+                <div class="header-buttons">
+                    <button class="lang-btn" onclick="toggleLanguage()">
+                        <i class="fas fa-language"></i> <span id="lang-text">العربية</span>
+                    </button>
+                    <a href="/logout" class="logout-btn">
+                        <i class="fas fa-sign-out-alt"></i> <span data-en="Logout" data-ar="تسجيل الخروج">Logout</span>
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="main">
         <div class="container">
-            <h1 class="page-title">Select a Server</h1>
-            <p class="page-subtitle">Choose which server you want to configure</p>
+            <h1 class="page-title" data-en="Select a Server" data-ar="اختر السيرفر">Select a Server</h1>
+            <p class="page-subtitle" data-en="Choose which server you want to configure" data-ar="اختر السيرفر الذي تريد تكوينه">Choose which server you want to configure</p>
+
+            <div class="button-container">
+                <a href="https://discord.com/api/oauth2/authorize?client_id=1460760802138128567&permissions=8&scope=bot%20applications.commands" target="_blank" class="add-bot-btn">
+                    <i class="fas fa-plus-circle"></i> <span data-en="Add Bot to Server" data-ar="إضافة البوت للسيرفر">Add Bot to Server</span>
+                </a>
+            </div>
 
             <div class="servers-grid">
                 {% for guild in guilds %}
@@ -175,5 +233,36 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // Load language preference from localStorage
+        let currentLang = localStorage.getItem('language') || 'en';
+
+        function toggleLanguage() {
+            currentLang = currentLang === 'en' ? 'ar' : 'en';
+            localStorage.setItem('language', currentLang);
+            updateLanguage();
+        }
+
+        function updateLanguage() {
+            // Update all elements with data-en and data-ar attributes
+            document.querySelectorAll('[data-en]').forEach(element => {
+                const text = currentLang === 'en' ? element.getAttribute('data-en') : element.getAttribute('data-ar');
+                element.textContent = text;
+            });
+
+            // Update language toggle button text
+            const langText = document.getElementById('lang-text');
+            if (langText) {
+                langText.textContent = currentLang === 'en' ? 'العربية' : 'English';
+            }
+
+            // Update page direction for Arabic
+            document.body.style.direction = currentLang === 'ar' ? 'rtl' : 'ltr';
+        }
+
+        // Apply language on page load
+        window.addEventListener('DOMContentLoaded', updateLanguage);
+    </script>
 </body>
 </html>
