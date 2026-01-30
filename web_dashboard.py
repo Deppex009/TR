@@ -120,18 +120,30 @@ def callback():
         guilds_response.raise_for_status()
         guilds = guilds_response.json()
         
-        # Get bot's guilds to filter
-        bot_headers = {'Authorization': f'Bot {DISCORD_BOT_TOKEN}'}
-        bot_guilds_response = requests.get(f'{DISCORD_API_BASE}/users/@me/guilds', headers=bot_headers)
-        bot_guilds_response.raise_for_status()
-        bot_guilds = bot_guilds_response.json()
-        bot_guild_ids = {g['id'] for g in bot_guilds}
+        # Get bot's guilds to filter (optional - show all if bot token fails)
+        user_guilds = []
+        try:
+            if DISCORD_BOT_TOKEN:
+                bot_headers = {'Authorization': f'Bot {DISCORD_BOT_TOKEN}'}
+                bot_guilds_response = requests.get(f'{DISCORD_API_BASE}/users/@me/guilds', headers=bot_headers)
+                bot_guilds_response.raise_for_status()
+                bot_guilds = bot_guilds_response.json()
+                bot_guild_ids = {g['id'] for g in bot_guilds}
+                
+                # Filter guilds where user has MANAGE_GUILD permission and bot is present
+                user_guilds = [
+                    g for g in guilds 
+                    if (int(g['permissions']) & 0x20) == 0x20 and g['id'] in bot_guild_ids
+                ]
+        except Exception as bot_err:
+            print(f"Bot guild fetch failed: {bot_err}, showing all user guilds with manage permission")
         
-        # Filter guilds where user has MANAGE_GUILD permission and bot is present
-        user_guilds = [
-            g for g in guilds 
-            if (int(g['permissions']) & 0x20) == 0x20 and g['id'] in bot_guild_ids
-        ]
+        # If bot check failed or no guilds found, show all guilds with manage permission
+        if not user_guilds:
+            user_guilds = [
+                g for g in guilds 
+                if (int(g['permissions']) & 0x20) == 0x20
+            ]
         
         session['user'] = {
             'id': user['id'],
