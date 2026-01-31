@@ -192,6 +192,57 @@
             opacity: 1;
         }
 
+        @media (max-width: 768px) {
+            .loading-icon {
+                font-size: 3.5rem;
+            }
+            .loading-text {
+                font-size: 1.3rem;
+                padding: 0 20px;
+            }
+            .container {
+                padding: 0 15px;
+            }
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
+            }
+            .header-buttons {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            .lang-btn, .logout-btn {
+                padding: 8px 15px;
+                font-size: 0.9rem;
+            }
+            .page-title {
+                font-size: 1.8rem;
+            }
+            .page-subtitle {
+                font-size: 0.95rem;
+            }
+            .servers-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            .add-bot-btn {
+                padding: 12px 25px;
+                font-size: 0.95rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo {
+                font-size: 1.1rem;
+            }
+            .page-title {
+                font-size: 1.5rem;
+            }
+            .server-card {
+                padding: 20px;
+            }
+        }
+
         .loading-overlay {
             position: fixed;
             top: 0;

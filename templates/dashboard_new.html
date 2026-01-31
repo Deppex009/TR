@@ -55,7 +55,30 @@
         .toast { position: fixed; bottom: -100px; right: 30px; background: rgba(46, 204, 113, 0.95); padding: 20px 30px; border-radius: 15px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); transition: all 0.4s ease; z-index: 10000; display: flex; align-items: center; gap: 15px; }
         .toast.show { bottom: 30px; }
         .toast.error { background: rgba(231, 76, 60, 0.95); }
-        @media (max-width: 768px) { .tabs { flex-direction: column; } }
+        
+        @media (max-width: 768px) { 
+            .tabs { flex-direction: column; }
+            .loading-icon { font-size: 3.5rem; }
+            .loading-text { font-size: 1.3rem; padding: 0 20px; }
+            .container { padding: 0 15px; }
+            .header-content { flex-direction: column; gap: 10px; }
+            .header-actions { flex-wrap: wrap; justify-content: center; gap: 8px; }
+            .lang-btn, .back-btn, .logout-btn { padding: 8px 15px; font-size: 0.85rem; }
+            .server-title { font-size: 1.8rem; }
+            .server-subtitle { font-size: 0.95rem; }
+            .tab { padding: 10px 20px; font-size: 0.9rem; }
+            .setting-card { padding: 20px; }
+            .setting-title { font-size: 1.3rem; }
+            .setting-desc { font-size: 0.85rem; }
+            input[type="text"], input[type="color"] { font-size: 0.9rem; padding: 10px 14px; }
+        }
+
+        @media (max-width: 480px) {
+            .logo { font-size: 1rem; }
+            .server-title { font-size: 1.5rem; }
+            .tabs { gap: 8px; }
+            .tab { padding: 8px 15px; font-size: 0.85rem; }
+        }
 
         .loading-overlay {
             position: fixed;
