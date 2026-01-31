@@ -59,7 +59,7 @@
             justify-content: center;
             align-items: center;
             z-index: 9999;
-            animation: fadeOut 1s ease 4s forwards;
+            animation: fadeOut 0.6s ease 3s forwards;
         }
 
         @keyframes fadeOut {
@@ -71,125 +71,60 @@
 
         .loading-content {
             text-align: center;
-            animation: scaleIn 0.8s ease;
-            position: relative;
-        }
-
-        @keyframes scaleIn {
-            from {
-                transform: scale(0.5) rotate(-10deg);
-                opacity: 0;
-            }
-            to {
-                transform: scale(1) rotate(0deg);
-                opacity: 1;
-            }
-        }
-
-        .loading-spinner {
-            width: 100px;
-            height: 100px;
-            position: relative;
-            margin: 0 auto 40px;
-        }
-
-        .loading-spinner::before,
-        .loading-spinner::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border: 6px solid transparent;
-        }
-
-        .loading-spinner::before {
-            border-top-color: #667eea;
-            border-right-color: #667eea;
-            animation: spin 1.5s linear infinite;
-        }
-
-        .loading-spinner::after {
-            border-bottom-color: #764ba2;
-            border-left-color: #764ba2;
-            animation: spin 1.5s linear infinite reverse;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg) scale(1); }
-            50% { transform: rotate(180deg) scale(1.1); }
-            100% { transform: rotate(360deg) scale(1); }
         }
 
         .loading-icon {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 2.5rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: iconBounce 1.5s ease-in-out infinite;
+            font-size: 5rem;
+            color: #fff;
+            margin-bottom: 30px;
+            animation: iconGlow 2s ease-in-out infinite;
         }
 
-        @keyframes iconBounce {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.3); }
+        @keyframes iconGlow {
+            0%, 100% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 20px rgba(102, 126, 234, 0.5));
+            }
+            50% {
+                transform: scale(1.05);
+                filter: drop-shadow(0 0 40px rgba(102, 126, 234, 0.8));
+            }
         }
 
         .loading-text {
             font-size: 2rem;
             font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            letter-spacing: 2px;
-            animation: textFloat 3s ease-in-out infinite;
-            margin-bottom: 20px;
+            color: #fff;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
             direction: rtl;
-        }
-
-        @keyframes textFloat {
-            0%, 100% { 
-                transform: translateY(0);
-                opacity: 1;
-            }
-            50% { 
-                transform: translateY(-10px);
-                opacity: 0.8;
-            }
         }
 
         .loading-dots {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             justify-content: center;
         }
 
         .dot {
-            width: 12px;
-            height: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 14px;
+            height: 14px;
+            background: #667eea;
             border-radius: 50%;
-            animation: dotPulse 1.4s ease-in-out infinite;
+            animation: dotBounce 1.4s ease-in-out infinite;
         }
 
         .dot:nth-child(1) { animation-delay: 0s; }
         .dot:nth-child(2) { animation-delay: 0.2s; }
         .dot:nth-child(3) { animation-delay: 0.4s; }
 
-        @keyframes dotPulse {
-            0%, 100% { 
-                transform: scale(1);
-                opacity: 0.5;
+        @keyframes dotBounce {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.6;
             }
-            50% { 
-                transform: scale(1.5);
+            30% {
+                transform: translateY(-20px);
                 opacity: 1;
             }
         }
@@ -198,10 +133,8 @@
 <body>
     <div class="loading-overlay">
         <div class="loading-content">
-            <div class="loading-spinner">
-                <div class="loading-icon">
-                    <i class="fas fa-robot"></i>
-                </div>
+            <div class="loading-icon">
+                <i class="fas fa-robot"></i>
             </div>
             <div class="loading-text">التقنية وسيلة، والصلاة أولوية</div>
             <div class="loading-dots">
