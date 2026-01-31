@@ -8,6 +8,16 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%); min-height: 100vh; color: #fff; }
+        
+        .header, .main {
+            visibility: hidden;
+            animation: contentShow 0s linear 3s forwards;
+        }
+
+        @keyframes contentShow {
+            to { visibility: visible; }
+        }
+        
         .header { background: rgba(255, 255, 255, 0.05); padding: 20px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); position: sticky; top: 0; z-index: 1000; backdrop-filter: blur(10px); }
         .container { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
         .header-content { display: flex; justify-content: space-between; align-items: center; }

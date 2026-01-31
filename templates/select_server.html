@@ -18,7 +18,14 @@
             min-height: 100vh;
             color: #fff;
         }
+        .header, .main {
+            visibility: hidden;
+            animation: contentShow 0s linear 3s forwards;
+        }
 
+        @keyframes contentShow {
+            to { visibility: visible; }
+        }
         .header {
             background: rgba(255, 255, 255, 0.05);
             padding: 20px 0;
