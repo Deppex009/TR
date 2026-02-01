@@ -4,6 +4,10 @@ from discord import app_commands
 import json
 import os
 import logging
+import asyncio
+import random
+import re
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -98,7 +102,18 @@ def get_guild_config(guild_id):
     if "servers" in config:
         guild_id_str = str(guild_id)
         if guild_id_str in config["servers"]:
-            return config["servers"][guild_id_str]
+            guild_cfg = config["servers"][guild_id_str]
+            if "giveaway" not in guild_cfg:
+                guild_cfg["giveaway"] = {
+                    "channel_id": None,
+                    "duration": "1h",
+                    "winners": 1,
+                    "emoji": "🎉",
+                    "color": "#5865F2",
+                    "image_url": ""
+                }
+                save_config(config)
+            return guild_cfg
         else:
             # Create default config for this server
             default = {
@@ -112,6 +127,14 @@ def get_guild_config(guild_id):
                     "category_id": None,
                     "log_channel_id": None,
                     "admin_role_id": None
+                },
+                "giveaway": {
+                    "channel_id": None,
+                    "duration": "1h",
+                    "winners": 1,
+                    "emoji": "🎉",
+                    "color": "#5865F2",
+                    "image_url": ""
                 }
             }
             config["servers"][guild_id_str] = default
@@ -144,6 +167,14 @@ def update_guild_config(guild_id, updates):
                 "category_id": None,
                 "log_channel_id": None,
                 "admin_role_id": None
+            },
+            "giveaway": {
+                "channel_id": None,
+                "duration": "1h",
+                "winners": 1,
+                "emoji": "🎉",
+                "color": "#5865F2",
+                "image_url": ""
             }
         }
     
@@ -223,6 +254,235 @@ def parse_color(color_input):
     
     # Default fallback color
     return discord.Color(0x9B59B6)
+
+# Giveaway helpers
+GIVEAWAY_DURATION_REGEX = re.compile(r"^(\d+)(s|m|h|d|w)$", re.IGNORECASE)
+active_giveaways = {}
+
+def parse_duration(duration_str):
+    if not duration_str:
+        return None
+    duration_str = duration_str.strip().lower()
+    match = GIVEAWAY_DURATION_REGEX.match(duration_str)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
+        return amount * multipliers[unit]
+    if duration_str.isdigit():
+        return int(duration_str) * 60
+    return None
+
+def build_giveaway_embed(prize, host, end_ts, winners_count, entries_count, color, emoji, image_url=None, ended=False):
+    status_title = "🎉 Giveaway Ended" if ended else "🎉 Giveaway"
+    embed = discord.Embed(
+        title=f"{status_title} | سحب",
+        description=f"**Prize:** {prize}\n**الجائزة:** {prize}",
+        color=color
+    )
+    embed.add_field(name="Hosted by | المستضيف", value=host.mention, inline=True)
+    embed.add_field(name="Winners | الفائزون", value=str(winners_count), inline=True)
+    embed.add_field(name="Entries | المشاركات", value=str(entries_count), inline=True)
+    time_label = "Ended" if ended else "Ends"
+    embed.add_field(name=f"{time_label} | ينتهي", value=f"<t:{end_ts}:F>\n(<t:{end_ts}:R>)", inline=False)
+    embed.set_footer(text=f"Click {emoji} to enter | اضغط {emoji} للمشاركة")
+    if image_url:
+        embed.set_image(url=image_url)
+    return embed
+
+class GiveawayJoinView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Enter | دخول", style=discord.ButtonStyle.primary, emoji="🎉")
+    async def join_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
+        giveaway = active_giveaways.get(interaction.message.id)
+        if not giveaway:
+            return await interaction.response.send_message("❌ Giveaway انتهى", ephemeral=True)
+
+        if interaction.user.bot:
+            return await interaction.response.send_message("❌ Bots cannot join", ephemeral=True)
+
+        if interaction.user.id in giveaway["entries"]:
+            return await interaction.response.send_message("✅ You already entered | تم تسجيلك", ephemeral=True)
+
+        giveaway["entries"].add(interaction.user.id)
+
+        embed = build_giveaway_embed(
+            prize=giveaway["prize"],
+            host=interaction.guild.get_member(giveaway["host_id"]) or interaction.user,
+            end_ts=giveaway["end_ts"],
+            winners_count=giveaway["winners"],
+            entries_count=len(giveaway["entries"]),
+            color=discord.Color(giveaway["color"]),
+            emoji=giveaway["emoji"],
+            image_url=giveaway.get("image_url")
+        )
+        await interaction.message.edit(embed=embed, view=self)
+        await interaction.response.send_message("🎉 You joined the giveaway | تم تسجيلك في السحب", ephemeral=True)
+
+async def end_giveaway(message_id: int):
+    giveaway = active_giveaways.get(message_id)
+    if not giveaway:
+        return
+
+    channel = bot.get_channel(giveaway["channel_id"])
+    if channel is None:
+        try:
+            channel = await bot.fetch_channel(giveaway["channel_id"])
+        except Exception:
+            active_giveaways.pop(message_id, None)
+            return
+
+    try:
+        message = await channel.fetch_message(message_id)
+    except Exception:
+        active_giveaways.pop(message_id, None)
+        return
+
+    entries = list(giveaway["entries"])
+    winners_count = giveaway["winners"]
+    winners_ids = random.sample(entries, k=min(winners_count, len(entries))) if entries else []
+
+    view = GiveawayJoinView()
+    for item in view.children:
+        if isinstance(item, discord.ui.Button):
+            item.disabled = True
+            item.emoji = giveaway["emoji"]
+
+    embed = build_giveaway_embed(
+        prize=giveaway["prize"],
+        host=message.guild.get_member(giveaway["host_id"]) or message.guild.me,
+        end_ts=giveaway["end_ts"],
+        winners_count=giveaway["winners"],
+        entries_count=len(giveaway["entries"]),
+        color=discord.Color(giveaway["color"]),
+        emoji=giveaway["emoji"],
+        image_url=giveaway.get("image_url"),
+        ended=True
+    )
+    await message.edit(embed=embed, view=view)
+
+    if winners_ids:
+        winners_mentions = " ".join(f"<@{user_id}>" for user_id in winners_ids)
+        await channel.send(f"🎉 **Winners | الفائزون:** {winners_mentions}\n**Prize | الجائزة:** {giveaway['prize']}")
+    else:
+        await channel.send("❌ No valid entries | لا توجد مشاركات صحيحة")
+
+    active_giveaways.pop(message_id, None)
+
+async def schedule_giveaway_end(message_id: int, seconds: int):
+    await asyncio.sleep(seconds)
+    await end_giveaway(message_id)
+
+async def start_giveaway(interaction: discord.Interaction, prize: str, duration: str, winners: int, channel: discord.TextChannel = None):
+    seconds = parse_duration(duration)
+    if not seconds or seconds <= 0:
+        await interaction.response.send_message("❌ Duration format: 10s, 5m, 2h, 1d | صيغة المدة: 10s 5m 2h 1d", ephemeral=True)
+        return
+
+    if winners < 1:
+        await interaction.response.send_message("❌ Winners must be at least 1 | عدد الفائزين يجب أن يكون 1 على الأقل", ephemeral=True)
+        return
+
+    guild_cfg = get_guild_config(interaction.guild_id)
+    giveaway_cfg = guild_cfg.get("giveaway", {})
+
+    target_channel = channel
+    if target_channel is None and giveaway_cfg.get("channel_id"):
+        target_channel = interaction.guild.get_channel(int(giveaway_cfg.get("channel_id")))
+    if target_channel is None:
+        target_channel = interaction.channel
+
+    emoji = giveaway_cfg.get("emoji", "🎉")
+    color = parse_color(giveaway_cfg.get("color", "#5865F2"))
+    image_url = giveaway_cfg.get("image_url")
+
+    end_ts = int(datetime.utcnow().timestamp()) + seconds
+    embed = build_giveaway_embed(
+        prize=prize,
+        host=interaction.user,
+        end_ts=end_ts,
+        winners_count=winners,
+        entries_count=0,
+        color=color,
+        emoji=emoji,
+        image_url=image_url
+    )
+
+    view = GiveawayJoinView()
+    for item in view.children:
+        if isinstance(item, discord.ui.Button):
+            item.emoji = emoji
+
+    message = await target_channel.send(embed=embed, view=view)
+    active_giveaways[message.id] = {
+        "guild_id": interaction.guild_id,
+        "channel_id": target_channel.id,
+        "prize": prize,
+        "host_id": interaction.user.id,
+        "end_ts": end_ts,
+        "winners": winners,
+        "entries": set(),
+        "emoji": emoji,
+        "color": color.value,
+        "image_url": image_url
+    }
+
+    asyncio.create_task(schedule_giveaway_end(message.id, seconds))
+    if not interaction.response.is_done():
+        await interaction.response.send_message("✅ Giveaway started | تم بدء السحب", ephemeral=True)
+    else:
+        await interaction.followup.send("✅ Giveaway started | تم بدء السحب", ephemeral=True)
+
+class GiveawayModal(discord.ui.Modal, title="Giveaway | سحب"):
+    prize = discord.ui.TextInput(label="Prize | الجائزة", placeholder="Nitro / Role / Gift", max_length=200)
+    duration = discord.ui.TextInput(label="Duration (10m, 2h, 1d) | المدة", default="1h", max_length=20)
+    winners = discord.ui.TextInput(label="Winners | عدد الفائزين", default="1", max_length=3)
+    channel_id = discord.ui.TextInput(label="Channel ID (optional) | معرف القناة", required=False, max_length=25)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        channel = None
+        if self.channel_id.value:
+            try:
+                channel = interaction.guild.get_channel(int(self.channel_id.value))
+            except Exception:
+                channel = None
+
+        try:
+            winners_count = int(self.winners.value)
+        except Exception:
+            winners_count = 1
+
+        await start_giveaway(interaction, self.prize.value, self.duration.value, winners_count, channel)
+
+class GiveawayPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Create Giveaway | إنشاء سحب", style=discord.ButtonStyle.success, emoji="🎉")
+    async def create_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(GiveawayModal())
+
+@bot.tree.command(name="giveawayf", description="Host a giveaway | إنشاء سحب")
+@app_commands.describe(prize="Prize", duration="Duration (10m, 2h, 1d)", winners="Number of winners", channel="Channel to host in")
+async def giveawayf(interaction: discord.Interaction, prize: str, duration: str, winners: int, channel: discord.TextChannel = None):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ You need Manage Server permission | تحتاج صلاحية إدارة السيرفر", ephemeral=True)
+    await start_giveaway(interaction, prize, duration, winners, channel)
+
+@bot.tree.command(name="giveaway_panel", description="Open giveaway panel | فتح لوحة السحب")
+async def giveaway_panel(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ You need Manage Server permission | تحتاج صلاحية إدارة السيرفر", ephemeral=True)
+
+    embed = discord.Embed(
+        title="🎁 Giveaway Panel | لوحة السحب",
+        description="**Create a giveaway with a simple panel**\n\n**أنشئ سحب بسهولة من اللوحة**",
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text="Made by Depex © 2026")
+    await interaction.response.send_message(embed=embed, view=GiveawayPanelView(), ephemeral=True)
 
 @bot.event
 async def on_ready():
@@ -3029,6 +3289,10 @@ async def mod_setup(interaction: discord.Interaction):
 
 # Run the bot
 try:
-    bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+    # Use environment variable for token
+    token = os.getenv("DISCORD_BOT_TOKEN")
+    if not token:
+        raise RuntimeError("DISCORD_BOT_TOKEN is not set")
+    bot.run(token)
 except Exception as e:
     logger.error(f"Bot error: {e}", exc_info=True)

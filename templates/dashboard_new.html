@@ -216,6 +216,7 @@
             <div class="tabs">
                 <div class="tab active" onclick="switchTab('poems')"><i class="fas fa-scroll"></i> <span data-en="Poems" data-ar="القصائد">Poems</span></div>
                 <div class="tab" onclick="switchTab('tickets')"><i class="fas fa-ticket-alt"></i> <span data-en="Tickets" data-ar="التذاكر">Tickets</span></div>
+                <div class="tab" onclick="switchTab('giveaway')"><i class="fas fa-gift"></i> <span data-en="Giveaway" data-ar="السحب">Giveaway</span></div>
                 <div class="tab" onclick="switchTab('moderation')"><i class="fas fa-shield-alt"></i> <span data-en="Moderation" data-ar="الإدارة">Moderation</span></div>
                 <div class="tab" onclick="switchTab('general')"><i class="fas fa-cog"></i> <span data-en="General" data-ar="عام">General</span></div>
             </div>
@@ -353,6 +354,47 @@
                         
                         <button class="save-btn" onclick="saveTickets()">
                             <i class="fas fa-save"></i> Save All Ticket Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODERATION TAB -->
+            <div id="giveaway-tab" class="tab-content">
+                <div class="settings-grid">
+                    <div class="setting-card">
+                        <div class="setting-header">
+                            <div class="setting-icon"><i class="fas fa-gift"></i></div>
+                            <div class="setting-title" data-en="Giveaway Settings" data-ar="إعدادات السحب">Giveaway Settings</div>
+                        </div>
+                        <p class="setting-desc" data-en="Set default values for giveaways" data-ar="حدد القيم الافتراضية للسحب">Set default values for giveaways</p>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title" data-en="Basic Settings" data-ar="الإعدادات الأساسية">Basic Settings</div>
+                            <label data-en="Default Channel ID" data-ar="معرف القناة الافتراضية">Default Channel ID</label>
+                            <input type="text" id="giveaway-channel" placeholder="1234567890" value="{{ config.giveaway.channel_id if config.giveaway and config.giveaway.channel_id else '' }}">
+
+                            <label data-en="Default Duration" data-ar="المدة الافتراضية">Default Duration</label>
+                            <input type="text" id="giveaway-duration" placeholder="1h" value="{{ config.giveaway.duration if config.giveaway and config.giveaway.duration else '1h' }}">
+
+                            <label data-en="Default Winners" data-ar="عدد الفائزين الافتراضي">Default Winners</label>
+                            <input type="text" id="giveaway-winners" placeholder="1" value="{{ config.giveaway.winners if config.giveaway and config.giveaway.winners else 1 }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title" data-en="Appearance" data-ar="المظهر">Appearance</div>
+                            <label data-en="Giveaway Emoji" data-ar="إيموجي السحب">Giveaway Emoji</label>
+                            <input type="text" id="giveaway-emoji" placeholder="🎉" value="{{ config.giveaway.emoji if config.giveaway and config.giveaway.emoji else '🎉' }}">
+
+                            <label data-en="Embed Color" data-ar="لون الرسالة">Embed Color</label>
+                            <input type="text" id="giveaway-color" placeholder="#5865F2" value="{{ config.giveaway.color if config.giveaway and config.giveaway.color else '#5865F2' }}">
+
+                            <label data-en="Image URL (optional)" data-ar="رابط الصورة (اختياري)">Image URL (optional)</label>
+                            <input type="text" id="giveaway-image" placeholder="https://..." value="{{ config.giveaway.image_url if config.giveaway and config.giveaway.image_url else '' }}">
+                        </div>
+
+                        <button class="save-btn" onclick="saveGiveaway()">
+                            <i class="fas fa-save"></i> <span data-en="Save Giveaway Settings" data-ar="حفظ إعدادات السحب">Save Giveaway Settings</span>
                         </button>
                     </div>
                 </div>
@@ -530,6 +572,32 @@
                         add_user: document.getElementById('btn-add-user').value,
                         remove_user: document.getElementById('btn-remove-user').value
                     }
+                }
+            };
+
+            try {
+                const response = await fetch(`/api/config/${serverId}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                showToast(result.message, !result.success);
+            } catch (error) {
+                showToast('Error: ' + error.message, true);
+            }
+        }
+
+        async function saveGiveaway() {
+            const winnersValue = parseInt(document.getElementById('giveaway-winners').value || '1', 10);
+            const data = {
+                giveaway: {
+                    channel_id: document.getElementById('giveaway-channel').value || null,
+                    duration: document.getElementById('giveaway-duration').value || '1h',
+                    winners: Number.isNaN(winnersValue) ? 1 : winnersValue,
+                    emoji: document.getElementById('giveaway-emoji').value || '🎉',
+                    color: document.getElementById('giveaway-color').value || '#5865F2',
+                    image_url: document.getElementById('giveaway-image').value || ''
                 }
             };
 

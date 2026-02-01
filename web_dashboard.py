@@ -62,11 +62,31 @@ def get_server_config(server_id):
             "image_url": "",
             "auto_react": False,
             "react_emojis": ["❤️", "🔥"],
-            "tickets": {}
+            "tickets": {},
+            "giveaway": {
+                "channel_id": None,
+                "duration": "1h",
+                "winners": 1,
+                "emoji": "🎉",
+                "color": "#5865F2",
+                "image_url": ""
+            }
         }
         save_config(config)
-    
-    return config["servers"][server_id]
+
+    server_cfg = config["servers"][server_id]
+    if "giveaway" not in server_cfg:
+        server_cfg["giveaway"] = {
+            "channel_id": None,
+            "duration": "1h",
+            "winners": 1,
+            "emoji": "🎉",
+            "color": "#5865F2",
+            "image_url": ""
+        }
+        save_config(config)
+
+    return server_cfg
 
 def login_required(f):
     @wraps(f)
