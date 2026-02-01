@@ -625,6 +625,66 @@
         // Language switcher functionality
         let currentLang = localStorage.getItem('language') || 'en';
 
+        // Translation dictionary for all labels
+        const translations = {
+            'Panel Title': 'عنوان اللوحة',
+            'Panel Description': 'وصف اللوحة',
+            'Panel Image URL': 'رابط صورة اللوحة',
+            'Panel Author Name': 'اسم المؤلف',
+            'Panel Author Icon URL': 'رابط أيقونة المؤلف',
+            'Embed Color': 'لون الرسالة',
+            'Panel Settings': 'إعدادات اللوحة',
+            'Dropdown Placeholder': 'نص القائمة المنسدلة',
+            'Menu Placeholder': 'نص القائمة',
+            'Dropdown Settings': 'إعدادات القائمة',
+            'Ticket Messages': 'رسائل التذاكر',
+            'Ticket Created Title': 'عنوان إنشاء التذكرة',
+            'Ticket Created Description': 'وصف إنشاء التذكرة',
+            'Modal Title': 'عنوان النافذة',
+            'Modal Placeholder': 'نص النافذة',
+            'Reason Label': 'تسمية السبب',
+            'Footer Text': 'نص التذييل',
+            'Claim Message': 'رسالة المطالبة',
+            'Button Labels': 'تسميات الأزرار',
+            'Close Button Text': 'نص زر الإغلاق',
+            'Close Button Emoji': 'إيموجي زر الإغلاق',
+            'Claim Button Text': 'نص زر المطالبة',
+            'Claim Button Emoji': 'إيموجي زر المطالبة',
+            'Rename Button Text': 'نص زر إعادة التسمية',
+            'Add User Button Text': 'نص زر إضافة مستخدم',
+            'Remove User Button Text': 'نص زر إزالة مستخدم',
+            'Save Tickets': 'حفظ التذاكر',
+            'Moderation Settings': 'إعدادات الإدارة',
+            'Channel Settings': 'إعدادات القناة',
+            'Moderation Log Channel ID': 'معرف قناة سجل الإدارة',
+            'DM Messages': 'رسائل الخاص',
+            'Ban DM Message': 'رسالة خاص الحظر',
+            'Kick DM Message': 'رسالة خاص الطرد',
+            'Warn DM Message': 'رسالة خاص التحذير',
+            'Timeout DM Message': 'رسالة خاص العقوبة المؤقتة',
+            'Log Titles': 'عناوين السجل',
+            'Ban Log Title': 'عنوان سجل الحظر',
+            'Kick Log Title': 'عنوان سجل الطرد',
+            'Warn Log Title': 'عنوان سجل التحذير',
+            'Timeout Log Title': 'عنوان سجل العقوبة',
+            'Shortcuts': 'الاختصارات',
+            'Ban Shortcut': 'اختصار الحظر',
+            'Kick Shortcut': 'اختصار الطرد',
+            'Warn Shortcut': 'اختصار التحذير',
+            'Timeout Shortcut': 'اختصار العقوبة',
+            'Delete Shortcuts (Format: shortcut:amount, e.g., "m:5, d:10")': 'اختصارات الحذف (الصيغة: اختصار:عدد، مثل "م:5، ي:10")',
+            'Save Moderation': 'حفظ الإدارة',
+            'General Settings': 'الإعدادات العامة',
+            'Welcome Channel ID': 'معرف قناة الترحيب',
+            'Greeting Message': 'رسالة الترحيب',
+            'Save General': 'حفظ العامة',
+            'Configure all ticket system settings': 'قم بتكوين جميع إعدادات نظام التذاكر',
+            'Basic Configuration': 'الإعدادات الأساسية',
+            'Category ID': 'معرف الفئة',
+            'Log Channel ID': 'معرف قناة السجل',
+            'Admin Role ID': 'معرف رتبة الإدارة'
+        };
+
         function toggleLanguage() {
             currentLang = currentLang === 'en' ? 'ar' : 'en';
             localStorage.setItem('language', currentLang);
@@ -632,9 +692,45 @@
         }
 
         function updateLanguage() {
+            // Translate elements with data-en/data-ar attributes
             document.querySelectorAll('[data-en]').forEach(element => {
                 const text = currentLang === 'en' ? element.getAttribute('data-en') : element.getAttribute('data-ar');
                 element.textContent = text;
+            });
+
+            // Translate all label elements using dictionary
+            document.querySelectorAll('label').forEach(label => {
+                const originalText = label.textContent.trim();
+                if (currentLang === 'ar' && translations[originalText]) {
+                    label.setAttribute('data-original', originalText);
+                    label.textContent = translations[originalText];
+                } else if (currentLang === 'en' && label.getAttribute('data-original')) {
+                    label.textContent = label.getAttribute('data-original');
+                }
+            });
+
+            // Translate setting titles and descriptions
+            document.querySelectorAll('.setting-group-title, .setting-title, .setting-desc').forEach(element => {
+                const originalText = element.textContent.trim();
+                if (currentLang === 'ar' && translations[originalText]) {
+                    element.setAttribute('data-original', originalText);
+                    element.textContent = translations[originalText];
+                } else if (currentLang === 'en' && element.getAttribute('data-original')) {
+                    element.textContent = element.getAttribute('data-original');
+                }
+            });
+
+            // Translate button text
+            document.querySelectorAll('.save-btn').forEach(button => {
+                const originalText = button.textContent.trim();
+                if (currentLang === 'ar' && translations[originalText]) {
+                    button.setAttribute('data-original', originalText);
+                    const icon = button.querySelector('i');
+                    button.innerHTML = icon ? icon.outerHTML + ' ' + translations[originalText] : translations[originalText];
+                } else if (currentLang === 'en' && button.getAttribute('data-original')) {
+                    const icon = button.querySelector('i');
+                    button.innerHTML = icon ? icon.outerHTML + ' ' + button.getAttribute('data-original') : button.getAttribute('data-original');
+                }
             });
 
             const langText = document.getElementById('lang-text');
