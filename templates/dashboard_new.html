@@ -169,7 +169,7 @@
             <div class="loading-icon">
                 <i class="fas fa-robot"></i>
             </div>
-            <div class="loading-text">التقنية وسيلة، والصلاة أولوية</div>
+            <div class="loading-text" id="loading-quote"></div>
             <div class="loading-dots">
                 <div class="dot"></div>
                 <div class="dot"></div>
@@ -177,6 +177,21 @@
             </div>
         </div>
     </div>
+
+    <script>
+        const quotes = [
+            'التقنية وسيلة، والصلاة أولوية',
+            'الصلاة نور، والتقنية أداة',
+            'الصلاة عماد الدين، والتقنية معين',
+            'أقم الصلاة قبل كل شيء',
+            'الصلاة أولاً، ثم بقية الأمور',
+            'الصلاة سكينة القلوب، والتقنية للخدمة',
+            'نجح بلا صلاة وهم، والصلاة بركة',
+            'الصلاة تاج الرأس، والتقنية للناس'
+        ];
+        const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+        document.getElementById('loading-quote').textContent = randomQuote;
+    </script>
 
     <div class="header">
         <div class="container">

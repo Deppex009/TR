@@ -241,7 +241,7 @@
         <div class="splash-logo">
             <i class="fas fa-robot"></i>
         </div>
-        <div class="splash-text">التقنية وسيلة، والصلاة أولوية</div>
+        <div class="splash-text" id="splash-quote"></div>
         <div class="splash-subtext">Loading...</div>
         <div class="splash-dots">
             <div class="splash-dot"></div>
@@ -249,6 +249,21 @@
             <div class="splash-dot"></div>
         </div>
     </div>
+
+    <script>
+        const quotes = [
+            'التقنية وسيلة، والصلاة أولوية',
+            'الصلاة نور، والتقنية أداة',
+            'الصلاة عماد الدين، والتقنية معين',
+            'أقم الصلاة قبل كل شيء',
+            'الصلاة أولاً، ثم بقية الأمور',
+            'الصلاة سكينة القلوب، والتقنية للخدمة',
+            'نجح بلا صلاة وهم، والصلاة بركة',
+            'الصلاة تاج الرأس، والتقنية للناس'
+        ];
+        const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+        document.getElementById('splash-quote').textContent = randomQuote;
+    </script>
 
     <div class="login-container">
         <div class="logo">
