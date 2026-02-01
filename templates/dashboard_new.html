@@ -211,45 +211,45 @@
                     <div class="setting-card">
                         <div class="setting-header">
                             <div class="setting-icon"><i class="fas fa-scroll"></i></div>
-                            <div class="setting-title">Poem Settings</div>
+                            <div class="setting-title" data-en="Poem Settings" data-ar="إعدادات القصائد">Poem Settings</div>
                         </div>
-                        <p class="setting-desc">Configure all poem-related settings in one place</p>
+                        <p class="setting-desc" data-en="Configure all poem-related settings in one place" data-ar="قم بتكوين جميع إعدادات القصائد في مكان واحد">Configure all poem-related settings in one place</p>
                         
                         <div class="setting-group">
-                            <div class="setting-group-title">Channel Configuration</div>
-                            <label>Poem Channel ID</label>
+                            <div class="setting-group-title" data-en="Channel Configuration" data-ar="إعدادات القناة">Channel Configuration</div>
+                            <label data-en="Poem Channel ID" data-ar="معرف قناة القصائد">Poem Channel ID</label>
                             <input type="text" id="poem-channel" placeholder="1460729566908911790" value="{{ config.poem_channel or '' }}">
                         </div>
 
                         <div class="setting-group">
-                            <div class="setting-group-title">Embed Appearance</div>
-                            <label>Embed Color</label>
+                            <div class="setting-group-title" data-en="Embed Appearance" data-ar="مظهر الرسالة">Embed Appearance</div>
+                            <label data-en="Embed Color" data-ar="لون الرسالة">Embed Color</label>
                             <input type="color" id="embed-color-picker" value="{{ config.embed_color or '#9B59B6' }}" style="height: 50px; margin-bottom: 10px;">
                             <input type="text" id="embed-color" placeholder="#9B59B6" value="{{ config.embed_color or '#9B59B6' }}">
                         </div>
 
                         <div class="setting-group">
-                            <div class="setting-group-title">Image Settings</div>
+                            <div class="setting-group-title" data-en="Image Settings" data-ar="إعدادات الصور">Image Settings</div>
                             <label class="checkbox-label">
                                 <input type="checkbox" id="show-image" {{ 'checked' if config.show_image else '' }}>
-                                Show Images in Poems
+                                <span data-en="Show Images in Poems" data-ar="إظهار الصور في القصائد">Show Images in Poems</span>
                             </label>
-                            <label>Image URL</label>
+                            <label data-en="Image URL" data-ar="رابط الصورة">Image URL</label>
                             <input type="text" id="image-url" placeholder="https://cdn.discordapp.com/..." value="{{ config.image_url or '' }}">
                         </div>
 
                         <div class="setting-group">
-                            <div class="setting-group-title">Auto Reactions</div>
+                            <div class="setting-group-title" data-en="Auto Reactions" data-ar="التفاعلات التلقائية">Auto Reactions</div>
                             <label class="checkbox-label">
                                 <input type="checkbox" id="auto-react" {{ 'checked' if config.auto_react else '' }}>
-                                Enable Auto React
+                                <span data-en="Enable Auto React" data-ar="تفعيل التفاعل التلقائي">Enable Auto React</span>
                             </label>
-                            <label>Reaction Emojis (comma separated)</label>
+                            <label data-en="Reaction Emojis (comma separated)" data-ar="الإيموجيات (مفصولة بفاصلة)">Reaction Emojis (comma separated)</label>
                             <input type="text" id="react-emojis" placeholder="❤️,🔥,👍" value="{{ ','.join(config.react_emojis) if config.react_emojis else '❤️,🔥' }}">
                         </div>
 
                         <button class="save-btn" onclick="saveAllPoems()">
-                            <i class="fas fa-save"></i> Save All Poem Settings
+                            <i class="fas fa-save"></i> <span data-en="Save All Poem Settings" data-ar="حفظ جميع إعدادات القصائد">Save All Poem Settings</span>
                         </button>
                     </div>
                 </div>
@@ -261,17 +261,17 @@
                     <div class="setting-card">
                         <div class="setting-header">
                             <div class="setting-icon"><i class="fas fa-ticket-alt"></i></div>
-                            <div class="setting-title">Ticket System</div>
+                            <div class="setting-title" data-en="Ticket System" data-ar="نظام التذاكر">Ticket System</div>
                         </div>
-                        <p class="setting-desc">Configure all ticket system settings</p>
+                        <p class="setting-desc" data-en="Configure all ticket system settings" data-ar="قم بتكوين جميع إعدادات نظام التذاكر">Configure all ticket system settings</p>
                         
                         <div class="setting-group">
-                            <div class="setting-group-title">Basic Configuration</div>
-                            <label>Category ID</label>
+                            <div class="setting-group-title" data-en="Basic Configuration" data-ar="الإعدادات الأساسية">Basic Configuration</div>
+                            <label data-en="Category ID" data-ar="معرف الفئة">Category ID</label>
                             <input type="text" id="ticket-category" placeholder="1234567890" value="{{ config.tickets.category_id if config.tickets and config.tickets.category_id else '' }}">
-                            <label>Log Channel ID</label>
+                            <label data-en="Log Channel ID" data-ar="معرف قناة السجل">Log Channel ID</label>
                             <input type="text" id="ticket-log" placeholder="1234567890" value="{{ config.tickets.log_channel_id if config.tickets and config.tickets.log_channel_id else '' }}">
-                            <label>Admin Role ID</label>
+                            <label data-en="Admin Role ID" data-ar="معرف رتبة الإدارة">Admin Role ID</label>
                             <input type="text" id="ticket-admin" placeholder="1234567890" value="{{ config.tickets.admin_role_id if config.tickets and config.tickets.admin_role_id else '' }}">
                         </div>
 
