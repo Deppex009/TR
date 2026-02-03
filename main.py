@@ -2504,6 +2504,10 @@ def get_mod_config(guild_id):
         mod_cfg["messages"] = {}
         changed = True
 
+    if "allowed_role_id" not in mod_cfg:
+        mod_cfg["allowed_role_id"] = None
+        changed = True
+
     # Default templates (used as embed description; placeholders: {server} {reason} {duration} {moderator})
     default_messages = {
         "ban_dm": "تم حظرك من **{server}**.\nالسبب: {reason}\n\nYou have been banned from **{server}**.\nReason: {reason}",
@@ -2576,6 +2580,35 @@ def build_mod_dm_embed(action, guild, moderator, reason, duration=None):
     embed.set_footer(text="Made by Depex")
     return embed
 
+
+def _get_allowed_role_id(mod_cfg):
+    role_id = mod_cfg.get("allowed_role_id")
+    if role_id in (None, "", 0, "0"):
+        return None
+    try:
+        return int(role_id)
+    except Exception:
+        return None
+
+
+def is_mod_authorized(member: discord.Member, mod_cfg, *, action: str | None = None) -> bool:
+    """Additional moderation gate.
+
+    If an allowed role is configured, the member must have it (admins bypass).
+    This does not replace Discord permissions; it adds an extra server-configurable check.
+    """
+    try:
+        if member.guild_permissions.administrator:
+            return True
+
+        allowed_role_id = _get_allowed_role_id(mod_cfg)
+        if not allowed_role_id:
+            return True
+
+        return any(r.id == allowed_role_id for r in getattr(member, "roles", []))
+    except Exception:
+        return False
+
 async def send_mod_log(guild, action, moderator, target, reason, duration=None):
     """Send moderation action to log channel"""
     try:
@@ -2587,12 +2620,23 @@ async def send_mod_log(guild, action, moderator, target, reason, duration=None):
         if not channel:
             return
         
-        embed = discord.Embed(
-            title=mod_cfg["messages"].get(f"{action}_log", f"**{action.upper()}**"),
-            color=discord.Color.red(),
-            timestamp=discord.utils.utcnow()
+        title = (
+            mod_cfg.get("messages", {}).get(f"{action}_log")
+            or mod_cfg.get("messages", {}).get(action)
+            or f"**{action.upper()}**"
         )
-        embed.add_field(name="User", value=f"{target.mention} ({target.id})", inline=True)
+
+        embed = discord.Embed(
+            title=title,
+            color=discord.Color.red(),
+            timestamp=discord.utils.utcnow(),
+        )
+
+        if isinstance(target, discord.abc.GuildChannel):
+            embed.add_field(name="Channel", value=f"{target.mention} ({target.id})", inline=True)
+        else:
+            embed.add_field(name="User", value=f"{target.mention} ({target.id})", inline=True)
+
         embed.add_field(name="Moderator", value=f"{moderator.mention}", inline=True)
         if duration:
             embed.add_field(name="Duration", value=duration, inline=True)
@@ -2620,6 +2664,11 @@ async def ban_user(interaction: discord.Interaction, user: discord.Member = None
             return await interaction.response.send_message("❌ ليس لديك صلاحية لحظر الأعضاء | You don't have permission to ban members", ephemeral=True)
         
         mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="ban"):
+            return await interaction.response.send_message(
+                "❌ You are not allowed to use moderation commands in this server.",
+                ephemeral=True,
+            )
         
         # Ban user first
         await user.ban(reason=reason)
@@ -2661,6 +2710,11 @@ async def kick_user(interaction: discord.Interaction, user: discord.Member = Non
             return await interaction.response.send_message("❌ ليس لديك صلاحية لطرد الأعضاء | You don't have permission to kick members", ephemeral=True)
         
         mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="kick"):
+            return await interaction.response.send_message(
+                "❌ You are not allowed to use moderation commands in this server.",
+                ephemeral=True,
+            )
         
         # Kick user first
         await user.kick(reason=reason)
@@ -2702,6 +2756,11 @@ async def timeout_user(interaction: discord.Interaction, user: discord.Member = 
             return await interaction.response.send_message("❌ You don't have permission to timeout members", ephemeral=True)
         
         mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="timeout"):
+            return await interaction.response.send_message(
+                "❌ You are not allowed to use moderation commands in this server.",
+                ephemeral=True,
+            )
 
         # Discord timeout max is 28 days (40320 minutes)
         if duration < 1 or duration > 40320:
@@ -2748,6 +2807,11 @@ async def warn_user(interaction: discord.Interaction, user: discord.Member = Non
             return await interaction.response.send_message("❌ ليس لديك صلاحية لتحذير الأعضاء | You don't have permission to warn members", ephemeral=True)
         
         mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="warn"):
+            return await interaction.response.send_message(
+                "❌ You are not allowed to use moderation commands in this server.",
+                ephemeral=True,
+            )
         
         # Respond first to avoid timeout
         embed = discord.Embed(
@@ -2777,11 +2841,17 @@ async def lock_channel(interaction: discord.Interaction, channel: discord.TextCh
     try:
         if not interaction.user.guild_permissions.manage_channels:
             return await interaction.response.send_message("❌ ليس لديك صلاحية لإدارة القنوات | You don't have permission to manage channels", ephemeral=True)
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="lock"):
+            return await interaction.response.send_message(
+                "❌ You are not allowed to use moderation commands in this server.",
+                ephemeral=True,
+            )
         
         channel = channel or interaction.channel
         await channel.set_permissions(interaction.guild.default_role, send_messages=False, reason=reason)
-        
-        mod_cfg = get_mod_config(interaction.guild_id)
+
         embed = discord.Embed(
             title="🔒 تم قفل القناة | Channel Locked",
             description=f"{channel.mention} **تم قفلها**\n**السبب:** {reason}\n\n{channel.mention} **has been locked**\n**Reason:** {reason}",
@@ -2799,6 +2869,13 @@ async def unlock_channel(interaction: discord.Interaction, channel: discord.Text
     try:
         if not interaction.user.guild_permissions.manage_channels:
             return await interaction.response.send_message("❌ ليس لديك صلاحية لإدارة القنوات | You don't have permission to manage channels", ephemeral=True)
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="unlock"):
+            return await interaction.response.send_message(
+                "❌ You are not allowed to use moderation commands in this server.",
+                ephemeral=True,
+            )
         
         channel = channel or interaction.channel
         await channel.set_permissions(interaction.guild.default_role, send_messages=True, reason=reason)
@@ -2820,6 +2897,13 @@ async def clear_messages(interaction: discord.Interaction, amount: int):
     try:
         if not interaction.user.guild_permissions.manage_messages:
             return await interaction.response.send_message("❌ ليس لديك صلاحية لإدارة الرسائل | You don't have permission to manage messages", ephemeral=True)
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="clear"):
+            return await interaction.response.send_message(
+                "❌ You are not allowed to use moderation commands in this server.",
+                ephemeral=True,
+            )
         
         await interaction.response.defer(ephemeral=True)
         deleted = await interaction.channel.purge(limit=amount)
@@ -2847,9 +2931,16 @@ async def on_message(message):
                 
                 try:
                     action = action_data.get("action")
+
+                    # Role gate (admins bypass). Applies to all shortcut actions.
+                    if not is_mod_authorized(message.author, mod_cfg, action=action):
+                        continue
                     
                     # Handle delete messages shortcut
                     if action == "delete":
+                        if not message.author.guild_permissions.manage_messages:
+                            continue
+
                         # Extract number from message (e.g., "m10" -> 10)
                         parts = message.content[len(shortcut):]
                         amount = int(parts) if parts.isdigit() else int(action_data.get("default_amount", 5))
@@ -2860,9 +2951,50 @@ async def on_message(message):
                         notify = await message.channel.send(f"✅ Deleted {len(deleted)} messages")
                         await discord.utils.sleep_until(discord.utils.utcnow() + timedelta(seconds=3))
                         await notify.delete()
+
+                    # Handle lock/unlock channel shortcuts
+                    elif action in ["lock", "unlock"]:
+                        if not message.author.guild_permissions.manage_channels:
+                            continue
+
+                        channel = message.channel
+                        reason = message.content[len(shortcut):].strip() or "No reason provided"
+
+                        if action == "lock":
+                            await channel.set_permissions(message.guild.default_role, send_messages=False, reason=reason)
+                            embed = discord.Embed(
+                                title="🔒 تم قفل القناة | Channel Locked",
+                                description=f"{channel.mention} **تم قفلها**\n**السبب:** {reason}\n\n{channel.mention} **has been locked**\n**Reason:** {reason}",
+                                color=discord.Color.red(),
+                            )
+                            await message.channel.send(embed=embed, delete_after=10)
+                            await send_mod_log(message.guild, "channel_locked", message.author, channel, reason)
+                        else:
+                            await channel.set_permissions(message.guild.default_role, send_messages=True, reason=reason)
+                            embed = discord.Embed(
+                                title="🔓 تم فتح القناة | Channel Unlocked",
+                                description=f"{channel.mention} **تم فتحها**\n**السبب:** {reason}\n\n{channel.mention} **has been unlocked**\n**Reason:** {reason}",
+                                color=discord.Color.green(),
+                            )
+                            await message.channel.send(embed=embed, delete_after=10)
+                            await send_mod_log(message.guild, "channel_unlocked", message.author, channel, reason)
+
+                        try:
+                            await message.delete()
+                        except Exception:
+                            pass
                     
                     # Handle moderation shortcuts (ban, kick, warn, timeout)
                     elif action in ["ban", "kick", "warn", "timeout"]:
+                        required_perm = {
+                            "ban": "ban_members",
+                            "kick": "kick_members",
+                            "warn": "moderate_members",
+                            "timeout": "moderate_members",
+                        }.get(action)
+                        if required_perm and not getattr(message.author.guild_permissions, required_perm, False):
+                            continue
+
                         # Parse: shortcut @user reason or shortcut @user duration reason
                         content = message.content[len(shortcut):].strip()
                         
@@ -3053,6 +3185,16 @@ class ModSettingsView(discord.ui.View):
     @discord.ui.button(label="Log Channel", emoji="📝", style=discord.ButtonStyle.secondary, row=1)
     async def log_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = ModLogModal()
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="Lock/Unlock", emoji="🔒", style=discord.ButtonStyle.secondary, row=1)
+    async def lock_unlock_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = ChannelLockUnlockSettingsModal()
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="Access Role", emoji="🛡️", style=discord.ButtonStyle.secondary, row=1)
+    async def access_role_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = ModAccessRoleModal()
         await interaction.response.send_modal(modal)
 
 class BanSettingsModal(discord.ui.Modal):
@@ -3247,6 +3389,116 @@ class TimeoutSettingsModal(discord.ui.Modal):
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
+
+class ChannelLockUnlockSettingsModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="🔒 Lock/Unlock Shortcuts")
+
+        self.lock_shortcut = discord.ui.TextInput(
+            label="Lock shortcut (e.g., c, lock)",
+            placeholder="c",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=20,
+        )
+        self.add_item(self.lock_shortcut)
+
+        self.unlock_shortcut = discord.ui.TextInput(
+            label="Unlock shortcut (e.g., uc, unlock)",
+            placeholder="uc",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=20,
+        )
+        self.add_item(self.unlock_shortcut)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            guild_cfg = get_guild_config(interaction.guild_id)
+            if "moderation" not in guild_cfg:
+                guild_cfg["moderation"] = {}
+            if "shortcuts" not in guild_cfg["moderation"]:
+                guild_cfg["moderation"]["shortcuts"] = {}
+
+            updated = []
+            if self.lock_shortcut.value:
+                guild_cfg["moderation"]["shortcuts"][self.lock_shortcut.value] = {
+                    "action": "lock",
+                    "command": "lock",
+                }
+                updated.append(f"🔒 lock: `{self.lock_shortcut.value}`")
+
+            if self.unlock_shortcut.value:
+                guild_cfg["moderation"]["shortcuts"][self.unlock_shortcut.value] = {
+                    "action": "unlock",
+                    "command": "unlock",
+                }
+                updated.append(f"🔓 unlock: `{self.unlock_shortcut.value}`")
+
+            update_guild_config(interaction.guild_id, guild_cfg)
+
+            if not updated:
+                return await interaction.response.send_message(
+                    "✅ No shortcuts set (leave blank to keep current).",
+                    ephemeral=True,
+                )
+            await interaction.response.send_message(
+                "✅ Updated shortcuts:\n" + "\n".join(updated),
+                ephemeral=True,
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+class ModAccessRoleModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="🛡️ Moderation Access Role")
+
+        self.role = discord.ui.TextInput(
+            label="Role mention or ID (blank = disable)",
+            placeholder="@Moderators or 1234567890",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=80,
+        )
+        self.add_item(self.role)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            guild_cfg = get_guild_config(interaction.guild_id)
+            if "moderation" not in guild_cfg:
+                guild_cfg["moderation"] = {}
+
+            raw = (self.role.value or "").strip()
+            if not raw:
+                guild_cfg["moderation"]["allowed_role_id"] = None
+                update_guild_config(interaction.guild_id, guild_cfg)
+                return await interaction.response.send_message(
+                    "✅ Role gate disabled (anyone with Discord permissions can use mod commands).",
+                    ephemeral=True,
+                )
+
+            # Accept <@&id> mention or plain numeric ID
+            import re
+
+            match = re.search(r"(\d{5,})", raw)
+            if not match:
+                return await interaction.response.send_message("❌ Invalid role. Use a role mention or ID.", ephemeral=True)
+
+            role_id = int(match.group(1))
+            role_obj = interaction.guild.get_role(role_id) if interaction.guild else None
+            if not role_obj:
+                return await interaction.response.send_message("❌ Role not found in this server.", ephemeral=True)
+
+            guild_cfg["moderation"]["allowed_role_id"] = role_id
+            update_guild_config(interaction.guild_id, guild_cfg)
+            await interaction.response.send_message(
+                f"✅ Only {role_obj.mention} can use the moderation system (admins bypass).",
+                ephemeral=True,
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
 class ModMessagesModal(discord.ui.Modal):
     def __init__(self):
         super().__init__(title="Moderation Messages")
@@ -3312,6 +3564,8 @@ async def mod_setup(interaction: discord.Interaction):
                        "👢 **Kick** - Message & shortcut\n"
                        "⚠️ **Warn** - Message & shortcut\n"
                        "⏱️ **Timeout** - Message & shortcut\n"
+                       "🔒 **Lock/Unlock** - Shortcuts for channel lock/unlock\n"
+                       "🛡️ **Access Role** - Choose who can use mod commands\n"
                        "📝 **Log Channel** - Set mod log channel\n\n"
                        "**Shortcut Usage:**\n"
                        "• Set any text as shortcut (e.g., `k`, `ban`, `w`)\n"
@@ -3336,8 +3590,6 @@ async def mod_setup(interaction: discord.Interaction):
         app_commands.Choice(name="kick", value="kick"),
         app_commands.Choice(name="warn", value="warn"),
         app_commands.Choice(name="timeout", value="timeout"),
-        app_commands.Choice(name="dm", value="dm"),
-        app_commands.Choice(name="say", value="say"),
     ]
 )
 async def set_mod_color(interaction: discord.Interaction, action: app_commands.Choice[str], color: str):
@@ -3372,7 +3624,7 @@ async def set_mod_color(interaction: discord.Interaction, action: app_commands.C
         await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
 
-@bot.tree.command(name="dm", description="Send a DM embed to a user | إرسال رسالة خاصة بإيمبد")
+@bot.tree.command(name="dm", description="Send a DM to a user | إرسال رسالة خاصة")
 @app_commands.describe(user="User to DM", message="Message to send")
 async def dm_command(interaction: discord.Interaction, user: discord.User, message: str):
     try:
@@ -3383,15 +3635,13 @@ async def dm_command(interaction: discord.Interaction, user: discord.User, messa
             )
 
         mod_cfg = get_mod_config(interaction.guild_id)
-        embed = discord.Embed(
-            title="✉️ Message | رسالة",
-            description=message,
-            color=parse_color(str(mod_cfg.get("embed_colors", {}).get("dm", "#57F287"))),
-            timestamp=discord.utils.utcnow(),
-        )
-        embed.set_footer(text=f"From {interaction.guild.name}")
+        if not is_mod_authorized(interaction.user, mod_cfg, action="dm"):
+            return await interaction.response.send_message(
+                "❌ You are not allowed to use moderation commands in this server.",
+                ephemeral=True,
+            )
 
-        await user.send(embed=embed)
+        await user.send(message, allowed_mentions=discord.AllowedMentions.none())
         await interaction.response.send_message("✅ DM sent", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Couldn't DM user: {str(e)}", ephemeral=True)
@@ -3426,6 +3676,13 @@ async def say_command(
                 ephemeral=True,
             )
 
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="say"):
+            return await interaction.response.send_message(
+                "❌ You are not allowed to use moderation commands in this server.",
+                ephemeral=True,
+            )
+
         target_channel = channel or interaction.channel
 
         mention_value = mention.value if mention else "none"
@@ -3443,16 +3700,8 @@ async def say_command(
             content = "@everyone" if mention_value == "everyone" else "@here"
             allowed_mentions = discord.AllowedMentions(everyone=True, users=False, roles=False)
 
-        mod_cfg = get_mod_config(interaction.guild_id)
-        embed = discord.Embed(
-            title="📣 Announcement | إعلان",
-            description=message,
-            color=parse_color(str(mod_cfg.get("embed_colors", {}).get("say", "#57F287"))),
-            timestamp=discord.utils.utcnow(),
-        )
-        embed.set_footer(text=f"Requested by {interaction.user}")
-
-        await target_channel.send(content=content, embed=embed, allowed_mentions=allowed_mentions)
+        final_message = f"{content}\n{message}" if content else message
+        await target_channel.send(final_message, allowed_mentions=allowed_mentions)
         await interaction.response.send_message("✅ Sent", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
