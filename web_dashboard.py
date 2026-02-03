@@ -20,7 +20,7 @@ CONFIG_FILE = "poem_config.json"
 
 # Discord OAuth2 Settings
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "1460760802138128567")
-DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "VqoJHnxc2d-xdZbns5HTI_MgOGEtvSdn")
+DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://localhost:5000/callback")
 DISCORD_API_BASE = "https://discord.com/api/v10"
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")

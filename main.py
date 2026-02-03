@@ -7,7 +7,7 @@ import logging
 import asyncio
 import random
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -2480,26 +2480,101 @@ class EditMenuOptionModal(discord.ui.Modal):
 def get_mod_config(guild_id):
     """Get moderation config for guild"""
     guild_cfg = get_guild_config(guild_id)
+
+    changed = False
     if "moderation" not in guild_cfg:
-        guild_cfg["moderation"] = {
-            "enabled": True,
-            "mod_log_channel": None,
-            "dm_on_action": True,
-            "shortcuts": {},
-            "messages": {
-                "ban_dm": "You have been banned from {server}. Reason: {reason}",
-                "kick_dm": "You have been kicked from {server}. Reason: {reason}",
-                "warn_dm": "You have been warned in {server}. Reason: {reason}",
-                "timeout_dm": "You have been timed out in {server}. Duration: {duration}. Reason: {reason}",
-                "ban_log": "🔨 **User Banned**",
-                "kick_log": "👢 **User Kicked**",
-                "warn_log": "⚠️ **User Warned**",
-                "timeout_log": "⏱️ **User Timed Out**",
-                "channel_locked": "🔒 **Channel Locked**",
-                "channel_unlocked": "🔓 **Channel Unlocked**"
-            }
-        }
-    return guild_cfg["moderation"]
+        guild_cfg["moderation"] = {}
+        changed = True
+
+    mod_cfg = guild_cfg["moderation"]
+
+    if "enabled" not in mod_cfg:
+        mod_cfg["enabled"] = True
+        changed = True
+    if "mod_log_channel" not in mod_cfg:
+        mod_cfg["mod_log_channel"] = None
+        changed = True
+    if "dm_on_action" not in mod_cfg:
+        mod_cfg["dm_on_action"] = True
+        changed = True
+    if "shortcuts" not in mod_cfg:
+        mod_cfg["shortcuts"] = {}
+        changed = True
+    if "messages" not in mod_cfg:
+        mod_cfg["messages"] = {}
+        changed = True
+
+    # Default templates (used as embed description; placeholders: {server} {reason} {duration} {moderator})
+    default_messages = {
+        "ban_dm": "تم حظرك من **{server}**.\nالسبب: {reason}\n\nYou have been banned from **{server}**.\nReason: {reason}",
+        "kick_dm": "تم طردك من **{server}**.\nالسبب: {reason}\n\nYou have been kicked from **{server}**.\nReason: {reason}",
+        "warn_dm": "تم تحذيرك في **{server}**.\nالسبب: {reason}\n\nYou have been warned in **{server}**.\nReason: {reason}",
+        "timeout_dm": "تم إعطاؤك مهلة (Timeout) في **{server}**.\nالمدة: {duration}\nالسبب: {reason}\n\nYou have been timed out in **{server}**.\nDuration: {duration}\nReason: {reason}",
+        "ban_log": "🔨 **User Banned**",
+        "kick_log": "👢 **User Kicked**",
+        "warn_log": "⚠️ **User Warned**",
+        "timeout_log": "⏱️ **User Timed Out**",
+        "channel_locked": "🔒 **Channel Locked**",
+        "channel_unlocked": "🔓 **Channel Unlocked**",
+    }
+    for key, value in default_messages.items():
+        if key not in mod_cfg["messages"]:
+            mod_cfg["messages"][key] = value
+            changed = True
+
+    # Per-command DM embed colors
+    if "embed_colors" not in mod_cfg:
+        mod_cfg["embed_colors"] = {}
+        changed = True
+    default_colors = {
+        "ban": "#ED4245",
+        "kick": "#FEE75C",
+        "warn": "#F1C40F",
+        "timeout": "#5865F2",
+        # messaging commands
+        "dm": "#57F287",
+        "say": "#57F287",
+    }
+    for key, value in default_colors.items():
+        if key not in mod_cfg["embed_colors"]:
+            mod_cfg["embed_colors"][key] = value
+            changed = True
+
+    if changed and guild_id is not None:
+        update_guild_config(guild_id, guild_cfg)
+
+    return mod_cfg
+
+
+def build_mod_dm_embed(action, guild, moderator, reason, duration=None):
+    mod_cfg = get_mod_config(guild.id)
+    color_value = mod_cfg.get("embed_colors", {}).get(action, "#5865F2")
+
+    titles = {
+        "ban": "🔨 Banned | تم الحظر",
+        "kick": "👢 Kicked | تم الطرد",
+        "warn": "⚠️ Warning | تحذير",
+        "timeout": "⏱️ Timeout | مهلة",
+        "dm": "✉️ Message | رسالة",
+        "say": "📣 Announcement | إعلان",
+    }
+
+    template = mod_cfg.get("messages", {}).get(f"{action}_dm", "{reason}")
+    description = template.format(
+        server=guild.name,
+        reason=reason or "No reason provided",
+        duration=duration or "N/A",
+        moderator=str(moderator),
+    )
+
+    embed = discord.Embed(
+        title=titles.get(action, action),
+        description=description,
+        color=parse_color(str(color_value)),
+        timestamp=discord.utils.utcnow(),
+    )
+    embed.set_footer(text="Made by Depex")
+    return embed
 
 async def send_mod_log(guild, action, moderator, target, reason, duration=None):
     """Send moderation action to log channel"""
@@ -2560,12 +2635,8 @@ async def ban_user(interaction: discord.Interaction, user: discord.Member = None
         # Then send DM
         if mod_cfg.get("dm_on_action", True):
             try:
-                ban_msg = mod_cfg.get("messages", {}).get("ban_dm", "تم حظرك من {server}. السبب: {reason}\n\nYou have been banned from {server}. Reason: {reason}")
-                dm_msg = ban_msg.format(
-                    server=interaction.guild.name,
-                    reason=reason
-                )
-                await user.send(dm_msg)
+                dm_embed = build_mod_dm_embed("ban", interaction.guild, interaction.user, reason)
+                await user.send(embed=dm_embed)
             except Exception as e:
                 logger.error(f"Failed to send DM to {user}: {e}")
         
@@ -2605,12 +2676,8 @@ async def kick_user(interaction: discord.Interaction, user: discord.Member = Non
         # Then send DM
         if mod_cfg.get("dm_on_action", True):
             try:
-                kick_msg = mod_cfg.get("messages", {}).get("kick_dm", "تم طردك من {server}. السبب: {reason}\n\nYou have been kicked from {server}. Reason: {reason}")
-                dm_msg = kick_msg.format(
-                    server=interaction.guild.name,
-                    reason=reason
-                )
-                await user.send(dm_msg)
+                dm_embed = build_mod_dm_embed("kick", interaction.guild, interaction.user, reason)
+                await user.send(embed=dm_embed)
             except Exception as e:
                 logger.error(f"Failed to send DM to {user}: {e}")
         
@@ -2635,9 +2702,13 @@ async def timeout_user(interaction: discord.Interaction, user: discord.Member = 
             return await interaction.response.send_message("❌ You don't have permission to timeout members", ephemeral=True)
         
         mod_cfg = get_mod_config(interaction.guild_id)
-        
+
+        # Discord timeout max is 28 days (40320 minutes)
+        if duration < 1 or duration > 40320:
+            return await interaction.response.send_message("❌ Duration must be between 1 and 40320 minutes (28 days)", ephemeral=True)
+
         # Timeout user first
-        await user.timeout(discord.utils.utcnow() + discord.timedelta(minutes=duration), reason=reason)
+        await user.timeout(discord.utils.utcnow() + timedelta(minutes=duration), reason=reason)
         
         # Respond to interaction
         embed = discord.Embed(
@@ -2650,24 +2721,13 @@ async def timeout_user(interaction: discord.Interaction, user: discord.Member = 
         # Then send DM
         if mod_cfg.get("dm_on_action", True):
             try:
-                timeout_msg = mod_cfg.get("messages", {}).get("timeout_dm", "تم كتمك في {server}. المدة: {duration}. السبب: {reason}\n\nYou have been timed out in {server}. Duration: {duration}. Reason: {reason}")
-                dm_msg = timeout_msg.format(
-                    server=interaction.guild.name,
-                    duration=f"{duration} دقيقة | {duration} minutes",
-                    reason=reason
-                )
-                await user.send(dm_msg)
+                duration_str = f"{duration} دقيقة | {duration} minutes"
+                dm_embed = build_mod_dm_embed("timeout", interaction.guild, interaction.user, reason, duration=duration_str)
+                await user.send(embed=dm_embed)
             except Exception as e:
                 logger.error(f"Failed to send DM to {user}: {e}")
         
         await send_mod_log(interaction.guild, "timeout", interaction.user, user, reason, f"{duration} minutes")
-        
-        embed = discord.Embed(
-            title="✅ User Timed Out",
-            description=f"{user.mention} has been timed out\n**Duration:** {duration} minutes\n**Reason:** {reason}",
-            color=discord.Color.yellow()
-        )
-        await interaction.response.send_message(embed=embed)
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
@@ -2700,12 +2760,8 @@ async def warn_user(interaction: discord.Interaction, user: discord.Member = Non
         # Then send DM
         if mod_cfg.get("dm_on_action", True):
             try:
-                warn_msg = mod_cfg.get("messages", {}).get("warn_dm", "تم تحذيرك في {server}. السبب: {reason}\n\nYou have been warned in {server}. Reason: {reason}")
-                dm_msg = warn_msg.format(
-                    server=interaction.guild.name,
-                    reason=reason
-                )
-                await user.send(dm_msg)
+                dm_embed = build_mod_dm_embed("warn", interaction.guild, interaction.user, reason)
+                await user.send(embed=dm_embed)
             except Exception as e:
                 logger.error(f"Failed to send DM to {user}: {e}")
                 await interaction.followup.send(f"⚠️ تم التحذير لكن لم يتم إرسال رسالة خاصة (ربما الرسائل معطلة)\n\nWarning sent but couldn't DM user (they may have DMs disabled)", ephemeral=True)
@@ -2802,7 +2858,7 @@ async def on_message(message):
                         deleted = await message.channel.purge(limit=amount)
                         
                         notify = await message.channel.send(f"✅ Deleted {len(deleted)} messages")
-                        await discord.utils.sleep_until(discord.utils.utcnow() + discord.timedelta(seconds=3))
+                        await discord.utils.sleep_until(discord.utils.utcnow() + timedelta(seconds=3))
                         await notify.delete()
                     
                     # Handle moderation shortcuts (ban, kick, warn, timeout)
@@ -2861,12 +2917,8 @@ async def on_message(message):
                             # Send DM
                             if mod_cfg.get("dm_on_action", True):
                                 try:
-                                    ban_msg = mod_cfg.get("messages", {}).get("ban_dm", "تم حظرك من {server}. السبب: {reason}\n\nYou have been banned from {server}. Reason: {reason}")
-                                    dm_msg = ban_msg.format(
-                                        server=message.guild.name,
-                                        reason=reason
-                                    )
-                                    await target.send(dm_msg)
+                                    dm_embed = build_mod_dm_embed("ban", message.guild, message.author, reason)
+                                    await target.send(embed=dm_embed)
                                 except Exception as e:
                                     logger.error(f"Failed to send DM: {e}")
                             
@@ -2889,12 +2941,8 @@ async def on_message(message):
                             # Send DM
                             if mod_cfg.get("dm_on_action", True):
                                 try:
-                                    kick_msg = mod_cfg.get("messages", {}).get("kick_dm", "تم طردك من {server}. السبب: {reason}\n\nYou have been kicked from {server}. Reason: {reason}")
-                                    dm_msg = kick_msg.format(
-                                        server=message.guild.name,
-                                        reason=reason
-                                    )
-                                    await target.send(dm_msg)
+                                    dm_embed = build_mod_dm_embed("kick", message.guild, message.author, reason)
+                                    await target.send(embed=dm_embed)
                                 except Exception as e:
                                     logger.error(f"Failed to send DM: {e}")
                             
@@ -2914,12 +2962,8 @@ async def on_message(message):
                             # Send DM
                             if mod_cfg.get("dm_on_action", True):
                                 try:
-                                    warn_msg = mod_cfg.get("messages", {}).get("warn_dm", "تم تحذيرك في {server}. السبب: {reason}\n\nYou have been warned in {server}. Reason: {reason}")
-                                    dm_msg = warn_msg.format(
-                                        server=message.guild.name,
-                                        reason=reason
-                                    )
-                                    await target.send(dm_msg)
+                                    dm_embed = build_mod_dm_embed("warn", message.guild, message.author, reason)
+                                    await target.send(embed=dm_embed)
                                 except Exception as e:
                                     logger.error(f"Failed to send DM: {e}")
                             
@@ -2938,23 +2982,23 @@ async def on_message(message):
                                 value, unit = match.groups()
                                 value = int(value)
                                 if unit == 's':
-                                    duration = discord.timedelta(seconds=value)
+                                    duration = timedelta(seconds=value)
                                     duration_minutes = value / 60
                                 elif unit == 'm':
-                                    duration = discord.timedelta(minutes=value)
+                                    duration = timedelta(minutes=value)
                                     duration_minutes = value
                                 elif unit == 'h':
-                                    duration = discord.timedelta(hours=value)
+                                    duration = timedelta(hours=value)
                                     duration_minutes = value * 60
                                 elif unit == 'd':
-                                    duration = discord.timedelta(days=value)
+                                    duration = timedelta(days=value)
                                     duration_minutes = value * 1440
                             else:
-                                duration = discord.timedelta(minutes=10)
+                                duration = timedelta(minutes=10)
                                 duration_minutes = 10
                             
                             # Timeout user
-                            await target.timeout(duration, reason=reason)
+                            await target.timeout(discord.utils.utcnow() + duration, reason=reason)
                             
                             # Send bilingual response
                             embed = discord.Embed(
@@ -2967,13 +3011,8 @@ async def on_message(message):
                             # Send DM
                             if mod_cfg.get("dm_on_action", True):
                                 try:
-                                    timeout_msg = mod_cfg.get("messages", {}).get("timeout_dm", "تم كتمك في {server}. المدة: {duration}. السبب: {reason}\n\nYou have been timed out in {server}. Duration: {duration}. Reason: {reason}")
-                                    dm_msg = timeout_msg.format(
-                                        server=message.guild.name,
-                                        duration=duration_str,
-                                        reason=reason
-                                    )
-                                    await target.send(dm_msg)
+                                    dm_embed = build_mod_dm_embed("timeout", message.guild, message.author, reason, duration=duration_str)
+                                    await target.send(embed=dm_embed)
                                 except Exception as e:
                                     logger.error(f"Failed to send DM: {e}")
                             
@@ -3279,11 +3318,142 @@ async def mod_setup(interaction: discord.Interaction):
                        "• Type: `shortcut @user reason`\n"
                        "• Example: `k @user spamming`\n\n"
                        "**Available Slash Commands:**\n"
-                       "`/ban` `/kick` `/timeout` `/warn` `/lock` `/unlock` `/clear`",
+                       "`/ban` `/kick` `/timeout` `/warn` `/lock` `/unlock` `/clear`\n"
+                       "`/dm` `/say` `/set_mod_color`",
             color=discord.Color.blue()
         )
         embed.set_footer(text="Made by Depex © 2026")
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="set_mod_color", description="Set embed color for moderation DMs/messages | تعيين لون الإيمبد")
+@app_commands.describe(action="Which action", color="Color name or hex: #FF0000 / 0xFF0000 / FF0000")
+@app_commands.choices(
+    action=[
+        app_commands.Choice(name="ban", value="ban"),
+        app_commands.Choice(name="kick", value="kick"),
+        app_commands.Choice(name="warn", value="warn"),
+        app_commands.Choice(name="timeout", value="timeout"),
+        app_commands.Choice(name="dm", value="dm"),
+        app_commands.Choice(name="say", value="say"),
+    ]
+)
+async def set_mod_color(interaction: discord.Interaction, action: app_commands.Choice[str], color: str):
+    try:
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("❌ Admin only | للأدمن فقط", ephemeral=True)
+
+        try:
+            parsed_color = parse_color(color)
+        except Exception:
+            return await interaction.response.send_message(
+                "❌ Invalid color. Use a name (red/blue/...) or hex like #FF0000",
+                ephemeral=True,
+            )
+
+        guild_cfg = get_guild_config(interaction.guild_id)
+        if "moderation" not in guild_cfg:
+            guild_cfg["moderation"] = {}
+        if "embed_colors" not in guild_cfg["moderation"]:
+            guild_cfg["moderation"]["embed_colors"] = {}
+
+        guild_cfg["moderation"]["embed_colors"][action.value] = color
+        update_guild_config(interaction.guild_id, guild_cfg)
+
+        preview = discord.Embed(
+            title=f"✅ Updated color: {action.value}",
+            description=f"Saved: `{color}`",
+            color=parsed_color,
+        )
+        await interaction.response.send_message(embed=preview, ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="dm", description="Send a DM embed to a user | إرسال رسالة خاصة بإيمبد")
+@app_commands.describe(user="User to DM", message="Message to send")
+async def dm_command(interaction: discord.Interaction, user: discord.User, message: str):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ You need Manage Messages | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        embed = discord.Embed(
+            title="✉️ Message | رسالة",
+            description=message,
+            color=parse_color(str(mod_cfg.get("embed_colors", {}).get("dm", "#57F287"))),
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.set_footer(text=f"From {interaction.guild.name}")
+
+        await user.send(embed=embed)
+        await interaction.response.send_message("✅ DM sent", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Couldn't DM user: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="say", description="Bot sends a message in a channel | إرسال رسالة في السيرفر")
+@app_commands.describe(
+    message="Message content",
+    channel="Channel to send in (optional)",
+    mention="Optional mention",
+    user="User to mention (only if mention=user)",
+)
+@app_commands.choices(
+    mention=[
+        app_commands.Choice(name="none", value="none"),
+        app_commands.Choice(name="user", value="user"),
+        app_commands.Choice(name="everyone", value="everyone"),
+        app_commands.Choice(name="here", value="here"),
+    ]
+)
+async def say_command(
+    interaction: discord.Interaction,
+    message: str,
+    channel: discord.TextChannel = None,
+    mention: app_commands.Choice[str] = None,
+    user: discord.User = None,
+):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ You need Manage Messages | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        target_channel = channel or interaction.channel
+
+        mention_value = mention.value if mention else "none"
+        content = None
+        allowed_mentions = discord.AllowedMentions(everyone=False, users=False, roles=False)
+
+        if mention_value == "user":
+            if not user:
+                return await interaction.response.send_message("❌ Please provide a user to mention", ephemeral=True)
+            content = user.mention
+            allowed_mentions = discord.AllowedMentions(users=True, everyone=False, roles=False)
+        elif mention_value in ("everyone", "here"):
+            if not interaction.user.guild_permissions.mention_everyone and not interaction.user.guild_permissions.administrator:
+                return await interaction.response.send_message("❌ You need Mention Everyone permission", ephemeral=True)
+            content = "@everyone" if mention_value == "everyone" else "@here"
+            allowed_mentions = discord.AllowedMentions(everyone=True, users=False, roles=False)
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        embed = discord.Embed(
+            title="📣 Announcement | إعلان",
+            description=message,
+            color=parse_color(str(mod_cfg.get("embed_colors", {}).get("say", "#57F287"))),
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.set_footer(text=f"Requested by {interaction.user}")
+
+        await target_channel.send(content=content, embed=embed, allowed_mentions=allowed_mentions)
+        await interaction.response.send_message("✅ Sent", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 

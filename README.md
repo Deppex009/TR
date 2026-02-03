@@ -32,6 +32,27 @@ A Discord poem bot designed for Arabic servers with beautiful embeds and customi
    python main.py
    ```
 
+## Deploy (GitHub → Discloud)
+
+This project is already configured for Discloud via `discloud.config` (entrypoint is `start_bot.py`).
+
+1. Push to GitHub (safe)
+   - Do **not** commit secrets: `.env` is ignored by `.gitignore`.
+   - If you ever pasted your token anywhere, rotate it in the Discord Developer Portal.
+
+2. Upload to Discloud
+   - Easiest path: from GitHub click **Code → Download ZIP**, then upload that ZIP to Discloud.
+   - Or create a GitHub Release and upload the release ZIP.
+
+3. Set environment variables on Discloud
+   - Required: `DISCORD_BOT_TOKEN`
+   - If you use the web dashboard (OAuth): `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`
+   - Restart the app after setting them.
+
+Notes:
+- `poem_config.json` is generated at runtime and is intentionally not committed.
+- Discloud `TYPE=bot` runs the bot only. If you want the Flask dashboard online too, host it as a separate service (see `DASHBOARD_SETUP.md`).
+
 ## Configuration
 
 The bot saves settings in `poem_config.json`:
