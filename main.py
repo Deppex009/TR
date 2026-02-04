@@ -812,6 +812,53 @@ class AutoReplyIndexModal(discord.ui.Modal):
         await interaction.response.send_message("❌ Unknown action.", ephemeral=True)
 
 
+class AutoReplyRolesModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Auto Reply Roles | رتب الرد")
+        self.guild_id = int(guild_id)
+
+        self.index = discord.ui.TextInput(
+            label="Rule number",
+            placeholder="1",
+            required=True,
+            max_length=5,
+        )
+        self.add_item(self.index)
+
+        self.roles = discord.ui.TextInput(
+            label="Roles (IDs or mentions)",
+            placeholder="all  OR  123,456  OR  <@&123>,<@&456>",
+            required=True,
+            max_length=180,
+        )
+        self.add_item(self.roles)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        items = get_auto_replies_config(interaction.guild_id)
+        try:
+            idx = int(self.index.value.strip())
+        except Exception:
+            return await interaction.response.send_message("❌ Invalid number.", ephemeral=True)
+
+        if idx < 1 or idx > len(items):
+            return await interaction.response.send_message("❌ Out of range.", ephemeral=True)
+
+        value = (self.roles.value or "").strip()
+        rule = items[idx - 1] or {}
+        if not value or value.lower() in ("all", "any", "none"):
+            rule["allowed_role_ids"] = []
+        else:
+            rule["allowed_role_ids"] = _parse_role_ids_from_text(value)
+
+        if not isinstance(rule.get("allowed_role_ids"), list):
+            rule["allowed_role_ids"] = []
+
+        items[idx - 1] = rule
+        update_guild_config(interaction.guild_id, {"auto_replies": items})
+        role_tag = "all" if not rule.get("allowed_role_ids") else str(len(rule.get("allowed_role_ids")))
+        await interaction.response.send_message(f"✅ Updated roles for rule {idx} (R:{role_tag}).", ephemeral=True)
+
+
 class AutoReplyPanelView(discord.ui.View):
     def __init__(self, guild_id: int):
         # Longer timeout to avoid 'Interaction failed' from expired panels.
@@ -835,6 +882,12 @@ class AutoReplyPanelView(discord.ui.View):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
         await interaction.response.send_modal(AutoReplyEditModal(self.guild_id))
+
+    @discord.ui.button(label="Roles", style=discord.ButtonStyle.secondary, row=0)
+    async def roles_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+        await interaction.response.send_modal(AutoReplyRolesModal(self.guild_id))
 
     @discord.ui.button(label="Remove", style=discord.ButtonStyle.danger, row=0)
     async def remove_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
