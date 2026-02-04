@@ -1605,7 +1605,7 @@ async def info(interaction: discord.Interaction):
         await interaction.response.send_message(embed=embed, ephemeral=True)
     except Exception as e:
         logger.error(f"Info command error: {e}")
-        await interaction.response.send_message("❌ Error fetching settings", ephemeral=True)
+        await interaction.response.send_message("❌ Error | خطأ أثناء جلب الإعدادات", ephemeral=True)
 
 @bot.tree.command(name="poem_setup", description="Open poem settings panel | فتح لوحة إعدادات الأشعار")
 async def poem_setup(interaction: discord.Interaction):
@@ -1633,7 +1633,7 @@ async def poem_setup(interaction: discord.Interaction):
         embed.set_footer(text=interaction.guild.name)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class PoemSettingsView(discord.ui.View):
     def __init__(self):
@@ -1666,7 +1666,7 @@ class PoemChannelModal(discord.ui.Modal):
                 ephemeral=True,
             )
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class PoemAppearanceModal(discord.ui.Modal):
     def __init__(self):
@@ -1699,7 +1699,7 @@ class PoemAppearanceModal(discord.ui.Modal):
             update_guild_config(interaction.guild_id, updates)
             await interaction.response.send_message("✅ Updated | تم تحديث المظهر", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 # Error handling
 @bot.event
@@ -4092,7 +4092,7 @@ async def clear_messages(interaction: discord.Interaction, amount: int | None = 
             ephemeral=True,
         )
     except Exception as e:
-        await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+        await interaction.followup.send(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
 async def _purge_channel_all(channel: discord.TextChannel, *, reason: str | None = None) -> int:
@@ -4321,25 +4321,25 @@ async def on_message(message):
                             # Show help message
                             if action == "ban":
                                 help_embed = discord.Embed(
-                                    title="Command: ban",
+                                    title="Command: ban | أمر: حظر",
                                     description="**حظر المحتجر**\n**الأختصارات**\n`#حظر -حظر- طرد- حظرتلقائي- طرد- بفك`\n**الاستخدام**\n`/ban [user] (time m/h/d/mo/y) (reason)`\n\n**أمثلة للأمر:**\n`" + shortcut + " @user`\n`" + shortcut + " @user spamming`\n`" + shortcut + " @user 1h spamming`\n`" + shortcut + " @user 1d breaking rules`\n`" + shortcut + " @user 1w advertising`",
                                     color=discord.Color.red()
                                 )
                             elif action == "kick":
                                 help_embed = discord.Embed(
-                                    title="Command: kick",
+                                    title="Command: kick | أمر: طرد",
                                     description="**طرد العضو**\n**الأختصارات**\n`#طرد -طرد- كيك- طرد- إطرد`\n**الاستخدام**\n`/kick [user] (reason)`\n\n**أمثلة للأمر:**\n`" + shortcut + " @user`\n`" + shortcut + " @user spamming`\n`" + shortcut + " @user inappropriate behavior`\n`" + shortcut + " @user breaking rules`",
                                     color=discord.Color.orange()
                                 )
                             elif action == "warn":
                                 help_embed = discord.Embed(
-                                    title="Command: warn",
+                                    title="Command: warn | أمر: تحذير",
                                     description="**تحذير العضو**\n**الأختصارات**\n`#تحذير -تحذير- وارن- انذار- إنذار`\n**الاستخدام**\n`/warn [user] (reason)`\n\n**أمثلة للأمر:**\n`" + shortcut + " @user`\n`" + shortcut + " @user be respectful`\n`" + shortcut + " @user stop spamming`\n`" + shortcut + " @user read the rules`",
                                     color=discord.Color.gold()
                                 )
                             elif action == "timeout":
                                 help_embed = discord.Embed(
-                                    title="Command: timeout",
+                                    title="Command: timeout | أمر: مهلة",
                                     description="**مهلة العضو**\n**الأختصارات**\n`#مهلة -مهلة- ميوت- كتم- صامت`\n**الاستخدام**\n`/timeout [user] [duration] (reason)`\n\n**أمثلة للأمر:**\n`" + shortcut + " @user 10m`\n`" + shortcut + " @user 10m spamming`\n`" + shortcut + " @user 1h trolling`\n`" + shortcut + " @user 1d breaking rules`\n\n**Duration format:** 10s, 5m, 2h, 1d",
                                     color=discord.Color.yellow()
                                 )
@@ -4473,7 +4473,7 @@ async def on_message(message):
                     
                 except Exception as e:
                     logger.error(f"Shortcut error: {e}")
-                    await message.channel.send(f"❌ Error: {str(e)}", delete_after=5)
+                    await message.channel.send(f"❌ Error | خطأ: {str(e)}", delete_after=5)
     
     await bot.process_commands(message)
 
@@ -4567,7 +4567,7 @@ class BanSettingsModal(discord.ui.Modal):
                 msg += f"\n**Shortcut:** Type `{self.shortcut.value}` + mention user (e.g., `{self.shortcut.value} @user reason`)"
             await interaction.response.send_message(msg, ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class KickSettingsModal(discord.ui.Modal):
     def __init__(self):
@@ -4615,7 +4615,7 @@ class KickSettingsModal(discord.ui.Modal):
                 msg += f"\n**Shortcut:** Type `{self.shortcut.value}` + mention user (e.g., `{self.shortcut.value} @user reason`)"
             await interaction.response.send_message(msg, ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class WarnSettingsModal(discord.ui.Modal):
     def __init__(self):
@@ -4663,7 +4663,7 @@ class WarnSettingsModal(discord.ui.Modal):
                 msg += f"\n**Shortcut:** Type `{self.shortcut.value}` + mention user (e.g., `{self.shortcut.value} @user reason`)"
             await interaction.response.send_message(msg, ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class TimeoutSettingsModal(discord.ui.Modal):
     def __init__(self):
@@ -4953,7 +4953,7 @@ class ClearSettingsModal(discord.ui.Modal):
                 ephemeral=True,
             )
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 @bot.tree.command(name="mod_setup", description="Open moderation settings panel | فتح لوحة إعدادات الإشراف")
 async def mod_setup(interaction: discord.Interaction):
@@ -4991,7 +4991,7 @@ async def mod_setup(interaction: discord.Interaction):
         embed.set_footer(text=interaction.guild.name)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
 @bot.tree.command(name="set_mod_color", description="Set embed color for moderation DMs/messages | تعيين لون الإيمبد")
@@ -5036,7 +5036,7 @@ async def set_mod_color(interaction: discord.Interaction, action: app_commands.C
         )
         await interaction.response.send_message(embed=preview, ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
 @bot.tree.command(name="dm", description="Send a DM to a user | إرسال رسالة خاصة")
@@ -5191,37 +5191,37 @@ async def embed_command(
             embed.set_footer(text=footer.strip())
 
         await target_channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
-        await interaction.response.send_message("✅ Embed sent", ephemeral=True)
+        await interaction.response.send_message("✅ Embed sent | تم إرسال الإمبد", ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
 @bot.tree.command(name="autoreply_panel", description="Auto replies panel | لوحة الردود التلقائية")
 async def autoreply_panel(interaction: discord.Interaction):
     try:
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج صلاحية إدارة السيرفر", ephemeral=True)
 
         items = get_auto_replies_config(interaction.guild_id)
         embed = _build_autoreply_panel_embed(interaction.guild, items)
         view = AutoReplyPanelView(interaction.guild_id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
 @bot.tree.command(name="channel_auto_panel", description="Channel auto reply/react panel | لوحة الردود في القنوات")
 async def channel_auto_panel(interaction: discord.Interaction):
     try:
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج صلاحية إدارة السيرفر", ephemeral=True)
 
         items = get_channel_auto_config(interaction.guild_id)
         embed = _build_channel_auto_panel_embed(interaction.guild, items)
         view = ChannelAutoPanelView(interaction.guild_id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 # Run the bot
 try:
