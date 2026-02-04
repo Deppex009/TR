@@ -3871,8 +3871,8 @@ async def unlock_channel(interaction: discord.Interaction, channel: discord.Text
         await interaction.response.send_message(f"❌ خطأ | Error: {str(e)}", ephemeral=True)
 
 @bot.tree.command(name="clear", description="Delete messages | حذف رسائل")
-@app_commands.describe(amount="Number of messages to delete")
-async def clear_messages(interaction: discord.Interaction, amount: int):
+@app_commands.describe(amount="Number of messages to delete (blank = clear channel) | عدد الرسائل (اتركه فارغًا لمسح القناة)")
+async def clear_messages(interaction: discord.Interaction, amount: int | None = None):
     """Delete messages"""
     try:
         if not interaction.user.guild_permissions.manage_messages:
@@ -3886,11 +3886,39 @@ async def clear_messages(interaction: discord.Interaction, amount: int):
             )
         
         await interaction.response.defer(ephemeral=True)
-        deleted = await interaction.channel.purge(limit=amount)
-        await interaction.followup.send(f"✅ تم حذف {len(deleted)} رسالة | Deleted {len(deleted)} messages", ephemeral=True)
-        await interaction.followup.send(f"✅ Deleted {len(deleted)} messages", ephemeral=True)
+
+        if amount is None:
+            total = await _purge_channel_all(interaction.channel, reason=f"Clear all by {interaction.user}")
+            await interaction.followup.send(
+                f"✅ تم حذف {total} رسالة (قد تبقى رسائل أقدم من 14 يوم) | Deleted {total} messages (messages older than 14 days may remain)",
+                ephemeral=True,
+            )
+            return
+
+        if amount <= 0:
+            return await interaction.followup.send("❌ Invalid amount | رقم غير صحيح", ephemeral=True)
+
+        deleted = await interaction.channel.purge(limit=int(amount))
+        await interaction.followup.send(
+            f"✅ تم حذف {len(deleted)} رسالة | Deleted {len(deleted)} messages",
+            ephemeral=True,
+        )
     except Exception as e:
         await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+async def _purge_channel_all(channel: discord.TextChannel, *, reason: str | None = None) -> int:
+    """Best-effort clear: deletes as many messages as possible (Discord won't bulk-delete >14 days)."""
+    total_deleted = 0
+    # Safety cap to avoid endless loops in weird edge cases
+    for _ in range(200):
+        batch = await channel.purge(limit=100, reason=reason)
+        if not batch:
+            break
+        total_deleted += len(batch)
+        # small delay to be kind to rate limits
+        await asyncio.sleep(1)
+    return total_deleted
 
 # Shortcut command handler
 @bot.event
@@ -4019,10 +4047,30 @@ async def on_message(message):
                             continue
 
                         # Extract number from message (e.g., "m10" -> 10)
-                        parts = message.content[len(shortcut):]
+                        parts = message.content[len(shortcut):].strip()
+
+                        # If no number provided => clear whole channel
+                        if not parts:
+                            try:
+                                await message.delete()
+                            except Exception:
+                                pass
+                            deleted_count = await _purge_channel_all(message.channel, reason=f"Clear all by {message.author}")
+                            notify = await message.channel.send(
+                                f"✅ تم مسح القناة ({deleted_count} رسالة) | Channel cleared ({deleted_count} messages)\n"
+                                f"⚠️ قد تبقى رسائل أقدم من 14 يوم | Messages older than 14 days may remain"
+                            )
+                            await discord.utils.sleep_until(discord.utils.utcnow() + timedelta(seconds=4))
+                            await notify.delete()
+                            continue
+
+                        # Support both "m10" and "m 10"
                         amount = int(parts) if parts.isdigit() else int(action_data.get("default_amount", 5))
-                        
-                        await message.delete()
+
+                        try:
+                            await message.delete()
+                        except Exception:
+                            pass
                         deleted = await message.channel.purge(limit=amount)
                         
                         notify = await message.channel.send(f"✅ Deleted {len(deleted)} messages")
@@ -4262,6 +4310,11 @@ class ModSettingsView(discord.ui.View):
     @discord.ui.button(label="Log Channel", emoji="📝", style=discord.ButtonStyle.secondary, row=1)
     async def log_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = ModLogModal()
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="Clear", emoji="🧹", style=discord.ButtonStyle.secondary, row=1)
+    async def clear_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = ClearSettingsModal()
         await interaction.response.send_modal(modal)
 
     @discord.ui.button(label="Lock/Unlock", emoji="🔒", style=discord.ButtonStyle.secondary, row=1)
@@ -4634,6 +4687,68 @@ class ModLogModal(discord.ui.Modal):
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
+
+class ClearSettingsModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="🧹 Clear Settings | إعدادات المسح")
+
+        self.shortcut = discord.ui.TextInput(
+            label="Shortcut (optional) | اختصار (اختياري)",
+            placeholder="m",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=20,
+        )
+        self.add_item(self.shortcut)
+
+        self.default_amount = discord.ui.TextInput(
+            label="Default number (if not a number) | الرقم الافتراضي",
+            placeholder="5",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=5,
+        )
+        self.add_item(self.default_amount)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            guild_cfg = get_guild_config(interaction.guild_id)
+            if "moderation" not in guild_cfg:
+                guild_cfg["moderation"] = {}
+            if "shortcuts" not in guild_cfg["moderation"]:
+                guild_cfg["moderation"]["shortcuts"] = {}
+
+            updated = []
+            if self.shortcut.value:
+                default_amount = 5
+                if self.default_amount.value and self.default_amount.value.strip().isdigit():
+                    default_amount = int(self.default_amount.value.strip())
+
+                guild_cfg["moderation"]["shortcuts"][self.shortcut.value.strip()] = {
+                    "action": "delete",
+                    "command": "clear",
+                    "default_amount": default_amount,
+                }
+                updated.append(
+                    f"🧹 clear: `{self.shortcut.value.strip()}` (default={default_amount})"
+                )
+
+            update_guild_config(interaction.guild_id, guild_cfg)
+            if not updated:
+                return await interaction.response.send_message(
+                    "✅ No shortcut set (leave blank to keep current).\n✅ لم يتم تغيير شيء.",
+                    ephemeral=True,
+                )
+            await interaction.response.send_message(
+                "✅ Updated clear shortcut | تم تحديث اختصار المسح:\n" + "\n".join(updated) +
+                "\n\nUsage | الاستخدام:\n"
+                "- `shortcut` = clear whole channel | مسح القناة\n"
+                "- `shortcut 10` = delete 10 messages | حذف 10 رسائل",
+                ephemeral=True,
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
 @bot.tree.command(name="mod_setup", description="Open moderation settings panel | فتح لوحة إعدادات الإشراف")
 async def mod_setup(interaction: discord.Interaction):
     """Open moderation settings panel"""
@@ -4644,21 +4759,24 @@ async def mod_setup(interaction: discord.Interaction):
         view = ModSettingsView()
         embed = discord.Embed(
             title="⚙️ Moderation Settings Panel",
-            description="**Configure each action with custom shortcuts:**\n\n"
-                       "🔨 **Ban** - Message & shortcut\n"
-                       "👢 **Kick** - Message & shortcut\n"
-                       "⚠️ **Warn** - Message & shortcut\n"
-                       "⏱️ **Timeout** - Message & shortcut\n"
-                       "🔒 **Lock/Unlock** - Shortcuts for channel lock/unlock\n"
-                       "🛡️ **Access Role** - Choose who can use mod commands\n"
-                       "📝 **Log Channel** - Set mod log channel\n\n"
-                       "**Shortcut Usage:**\n"
-                       "• Set any text as shortcut (e.g., `k`, `ban`, `w`)\n"
-                       "• Type: `shortcut @user reason`\n"
-                       "• Example: `k @user spamming`\n\n"
-                       "**Available Slash Commands:**\n"
-                       "`/ban` `/kick` `/timeout` `/warn` `/lock` `/unlock` `/clear`\n"
-                       "`/dm` `/say` `/set_mod_color`",
+            description=(
+                "**Configure actions + shortcuts (English/Arabic):**\n"
+                "**إعداد الأوامر + الاختصارات (عربي/إنجليزي):**\n\n"
+                "🔨 **Ban | حظر** - Message & shortcut | رسالة + اختصار\n"
+                "👢 **Kick | طرد** - Message & shortcut | رسالة + اختصار\n"
+                "⚠️ **Warn | تحذير** - Message & shortcut | رسالة + اختصار\n"
+                "⏱️ **Timeout | مهلة** - Message & shortcut | رسالة + اختصار\n"
+                "🧹 **Clear | مسح** - Shortcut + default amount | اختصار + رقم افتراضي\n"
+                "🔒 **Lock/Unlock | قفل/فتح** - Shortcuts | اختصارات\n"
+                "🛡️ **Access Role | صلاحية** - Who can use mod system | من يستطيع استخدام الإشراف\n"
+                "📝 **Log Channel | سجل** - Set mod log channel | تحديد قناة السجل\n\n"
+                "**Clear shortcut usage | استخدام اختصار المسح:**\n"
+                "- `m` = clear channel | مسح القناة\n"
+                "- `m 20` = delete 20 messages | حذف 20 رسالة\n\n"
+                "**Slash Commands | أوامر:**\n"
+                "`/ban` `/kick` `/timeout` `/warn` `/lock` `/unlock` `/clear`\n"
+                "`/dm` `/say` `/set_mod_color`"
+            ),
             color=discord.Color.blue()
         )
         embed.set_footer(text="Made by Depex © 2026")
