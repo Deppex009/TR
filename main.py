@@ -441,6 +441,51 @@ def _normalize_reply_mode(value: str | None) -> str:
     return "send"
 
 
+def _parse_role_ids_from_text(text: str | None) -> list[int]:
+    """Parse role IDs from a string.
+
+    Accepts role mentions (<@&id>) or raw IDs. Separators: space/comma/semicolon.
+    """
+    if not text:
+        return []
+    raw = str(text)
+    ids: list[int] = []
+
+    # Mentions
+    for m in re.findall(r"<@&(?P<id>\d{5,25})>", raw):
+        try:
+            ids.append(int(m))
+        except Exception:
+            pass
+
+    # Raw IDs
+    for m in re.findall(r"\b\d{5,25}\b", raw):
+        try:
+            ids.append(int(m))
+        except Exception:
+            pass
+
+    # Unique, keep order
+    seen: set[int] = set()
+    out: list[int] = []
+    for rid in ids:
+        if rid in seen:
+            continue
+        seen.add(rid)
+        out.append(rid)
+    return out
+
+
+def _member_has_any_role(member: discord.Member, role_ids: list[int]) -> bool:
+    if not role_ids:
+        return True
+    try:
+        role_set = set(int(x) for x in role_ids)
+        return any(r.id in role_set for r in getattr(member, "roles", []))
+    except Exception:
+        return False
+
+
 def _build_autoreply_panel_embed(guild: discord.Guild, items: list[dict], *, page: int = 0, page_size: int = 8) -> discord.Embed:
     embed = discord.Embed(
         title="💬 Auto Replies Panel | لوحة الردود التلقائية",
@@ -448,7 +493,9 @@ def _build_autoreply_panel_embed(guild: discord.Guild, items: list[dict], *, pag
             "Manage auto replies for this server.\n"
             "- **Trigger** = word/sentence\n"
             "- **Mode** = `send` (normal message) or `reply` (reply to user)\n\n"
-            "إدارة الردود التلقائية لهذا السيرفر."
+            "- **Roles** = limit replies to specific roles (set via Options)\n\n"
+            "إدارة الردود التلقائية لهذا السيرفر.\n"
+            "- **Roles | الرتب** = تحديد الرد لرتب معينة (من خانة Options)"
         ),
         color=discord.Color.blurple(),
     )
@@ -471,11 +518,15 @@ def _build_autoreply_panel_embed(guild: discord.Guild, items: list[dict], *, pag
         mode = _normalize_reply_mode(r.get("mode"))
         mention = "@" if r.get("mention", False) else "-"
         case = "Aa" if r.get("case_sensitive", False) else "aa"
+        allowed_roles = r.get("allowed_role_ids")
+        if not isinstance(allowed_roles, list):
+            allowed_roles = []
+        role_tag = "all" if not allowed_roles else str(len(allowed_roles))
         trig = str(r.get("trigger", "")).strip() or "(empty)"
         rep = str(r.get("reply", "")).strip() or "(empty)"
         if len(rep) > 140:
             rep = rep[:137] + "..."
-        lines.append(f"`{idx+1}` {enabled} `[{match_type} | {mode} | {mention} | {case}]`\n**{trig}** → {rep}")
+        lines.append(f"`{idx+1}` {enabled} `[{match_type} | {mode} | {mention} | {case} | R:{role_tag}]`\n**{trig}** → {rep}")
 
     embed.add_field(
         name=f"Rules ({start+1}-{end} / {total})",
@@ -525,10 +576,10 @@ class AutoReplyAddModal(discord.ui.Modal):
         self.add_item(self.mode)
 
         # NOTE: Discord modals allow max 5 inputs.
-        # Put mention + case_sensitive in one field.
+        # Put mention + case_sensitive + roles in one field.
         self.options = discord.ui.TextInput(
-            label="Options: mention=yes/no case=yes/no",
-            placeholder="mention=no case=no",
+            label="Options (mention/case/roles)",
+            placeholder="mention=no case=no roles=all",
             required=False,
             max_length=60,
         )
@@ -539,6 +590,13 @@ class AutoReplyAddModal(discord.ui.Modal):
         mention = _parse_bool_text("yes" if "mention=yes" in opt else "no" if "mention=no" in opt else None, False)
         case_sensitive = _parse_bool_text("yes" if "case=yes" in opt else "no" if "case=no" in opt else None, False)
 
+        role_ids: list[int] = []
+        m = re.search(r"roles\s*=\s*(.+)", opt, flags=re.IGNORECASE)
+        if m:
+            roles_value = (m.group(1) or "").strip()
+            if roles_value and roles_value not in ("all", "any", "none"):
+                role_ids = _parse_role_ids_from_text(roles_value)
+
         items = get_auto_replies_config(interaction.guild_id)
         items.append(
             {
@@ -548,6 +606,7 @@ class AutoReplyAddModal(discord.ui.Modal):
                 "mode": _normalize_reply_mode(self.mode.value),
                 "mention": mention,
                 "case_sensitive": case_sensitive,
+                "allowed_role_ids": role_ids,
                 "enabled": True,
             }
         )
@@ -586,8 +645,8 @@ class AutoReplyEditModal(discord.ui.Modal):
         self.add_item(self.reply)
 
         self.options = discord.ui.TextInput(
-            label="Options (match/mode/mention/case)",
-            placeholder="match=contains mode=send mention=no case=no",
+            label="Options (match/mode/mention/case/roles)",
+            placeholder="match=contains mode=send mention=no case=no roles=all",
             required=False,
             max_length=120,
         )
@@ -626,10 +685,21 @@ class AutoReplyEditModal(discord.ui.Modal):
                 if "case" in kv:
                     rule["case_sensitive"] = _parse_bool_text(kv.get("case"), bool(rule.get("case_sensitive", False)))
 
+                # roles: should be last if using spaces; commas recommended
+                m = re.search(r"roles\s*=\s*(.+)", opt, flags=re.IGNORECASE)
+                if m:
+                    roles_value = (m.group(1) or "").strip()
+                    if not roles_value or roles_value.lower() in ("all", "any", "none"):
+                        rule["allowed_role_ids"] = []
+                    else:
+                        rule["allowed_role_ids"] = _parse_role_ids_from_text(roles_value)
+
             # Ensure defaults exist
             rule["match"] = _normalize_match_type(rule.get("match"))
             rule["mode"] = _normalize_reply_mode(rule.get("mode"))
             rule["enabled"] = bool(rule.get("enabled", True))
+            if not isinstance(rule.get("allowed_role_ids"), list):
+                rule["allowed_role_ids"] = []
 
             items[i] = rule
             update_guild_config(interaction.guild_id, {"auto_replies": items})
@@ -663,6 +733,11 @@ class AutoReplyTestModal(discord.ui.Modal):
             for idx, rule in enumerate(items, start=1):
                 if not rule or not rule.get("enabled", True):
                     continue
+
+                allowed_roles = rule.get("allowed_role_ids")
+                if isinstance(allowed_roles, list) and allowed_roles:
+                    if not _member_has_any_role(interaction.user, allowed_roles):
+                        continue
                 trigger = str(rule.get("trigger", "")).strip()
                 reply = str(rule.get("reply", "")).strip()
                 if not trigger or not reply:
@@ -1190,7 +1265,7 @@ async def giveaway_panel(interaction: discord.Interaction):
         description="**Create a giveaway with a simple panel**\n\n**أنشئ سحب بسهولة من اللوحة**",
         color=discord.Color.blue()
     )
-    embed.set_footer(text="Made by Depex © 2026")
+    embed.set_footer(text=interaction.guild.name)
     await interaction.response.send_message(embed=embed, view=GiveawayPanelView(), ephemeral=True)
 
 @bot.event
@@ -1474,7 +1549,7 @@ async def poem_setup(interaction: discord.Interaction):
                        f"http://localhost:5000",
             color=parse_color(guild_cfg.get("embed_color", "#9B59B6"))
         )
-        embed.set_footer(text="Made by Depex © 2026")
+        embed.set_footer(text=interaction.guild.name)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
@@ -3548,7 +3623,7 @@ def build_mod_dm_embed(action, guild, moderator, reason, duration=None):
         color=parse_color(str(color_value)),
         timestamp=discord.utils.utcnow(),
     )
-    embed.set_footer(text="Made by Depex")
+    embed.set_footer(text=guild.name)
     return embed
 
 
@@ -3626,7 +3701,7 @@ async def send_mod_log(guild, action, moderator, target, reason, duration=None):
         if duration:
             embed.add_field(name="Duration", value=duration, inline=True)
         embed.add_field(name="Reason", value=reason or "No reason provided", inline=False)
-        embed.set_footer(text=f"Made by Depex")
+        embed.set_footer(text=guild.name)
         
         await channel.send(embed=embed)
     except Exception as e:
@@ -3983,6 +4058,12 @@ async def on_message(message):
         for rule in (guild_cfg.get("auto_replies") or []):
             if not rule or not rule.get("enabled", True):
                 continue
+
+            allowed_roles = rule.get("allowed_role_ids")
+            if isinstance(allowed_roles, list) and allowed_roles:
+                if isinstance(message.author, discord.Member) and not _member_has_any_role(message.author, allowed_roles):
+                    continue
+
             trigger = str(rule.get("trigger", "")).strip()
             reply = str(rule.get("reply", "")).strip()
             if not trigger or not reply:
@@ -4784,7 +4865,7 @@ async def mod_setup(interaction: discord.Interaction):
             ),
             color=discord.Color.blue()
         )
-        embed.set_footer(text="Made by Depex © 2026")
+        embed.set_footer(text=interaction.guild.name)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
@@ -4921,6 +5002,8 @@ async def say_command(
     title="Embed title (optional)",
     description="Embed description/text (optional)",
     color="Color name or hex (optional)",
+    image="Upload image (optional)",
+    thumbnail="Upload thumbnail (optional)",
     image_url="Image URL (optional)",
     thumbnail_url="Thumbnail URL (optional)",
     footer="Footer text (optional)",
@@ -4931,6 +5014,8 @@ async def embed_command(
     title: str = None,
     description: str = None,
     color: str = None,
+    image: discord.Attachment = None,
+    thumbnail: discord.Attachment = None,
     image_url: str = None,
     thumbnail_url: str = None,
     footer: str = None,
@@ -4944,7 +5029,7 @@ async def embed_command(
 
         target_channel = channel or interaction.channel
 
-        if not (title or description or image_url or thumbnail_url):
+        if not (title or description or image_url or thumbnail_url or image or thumbnail):
             return await interaction.response.send_message(
                 "❌ Please fill at least one field (title/description/image/thumbnail).",
                 ephemeral=True,
@@ -4957,10 +5042,22 @@ async def embed_command(
             timestamp=discord.utils.utcnow(),
         )
 
-        if image_url:
-            embed.set_image(url=image_url.strip())
-        if thumbnail_url:
-            embed.set_thumbnail(url=thumbnail_url.strip())
+        final_image_url = None
+        if image:
+            final_image_url = getattr(image, "url", None)
+        elif image_url:
+            final_image_url = image_url.strip()
+
+        final_thumbnail_url = None
+        if thumbnail:
+            final_thumbnail_url = getattr(thumbnail, "url", None)
+        elif thumbnail_url:
+            final_thumbnail_url = thumbnail_url.strip()
+
+        if final_image_url:
+            embed.set_image(url=final_image_url)
+        if final_thumbnail_url:
+            embed.set_thumbnail(url=final_thumbnail_url)
         if footer:
             embed.set_footer(text=footer.strip())
 
