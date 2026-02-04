@@ -409,6 +409,9 @@ def get_channel_auto_config(guild_id: int) -> list[dict]:
 
 
 def _matches_trigger(message_content: str, trigger: str, *, match_type: str, case_sensitive: bool) -> bool:
+    message_content = (message_content or "").strip()
+    trigger = (trigger or "").strip()
+
     if not case_sensitive:
         message_content = message_content.lower()
         trigger = trigger.lower()
@@ -424,34 +427,68 @@ def _matches_trigger(message_content: str, trigger: str, *, match_type: str, cas
     return trigger in message_content
 
 
-def _build_autoreply_panel_embed(guild: discord.Guild, items: list[dict]) -> discord.Embed:
+def _normalize_match_type(value: str | None) -> str:
+    v = (value or "contains").strip().lower()
+    if v in ("contains", "exact", "startswith", "endswith"):
+        return v
+    return "contains"
+
+
+def _normalize_reply_mode(value: str | None) -> str:
+    v = (value or "send").strip().lower()
+    if v in ("send", "reply"):
+        return v
+    return "send"
+
+
+def _build_autoreply_panel_embed(guild: discord.Guild, items: list[dict], *, page: int = 0, page_size: int = 8) -> discord.Embed:
     embed = discord.Embed(
         title="💬 Auto Replies Panel | لوحة الردود التلقائية",
-        description="Add / remove / toggle auto replies for words or sentences.",
+        description=(
+            "Manage auto replies for this server.\n"
+            "- **Trigger** = word/sentence\n"
+            "- **Mode** = `send` (normal message) or `reply` (reply to user)\n\n"
+            "إدارة الردود التلقائية لهذا السيرفر."
+        ),
         color=discord.Color.blurple(),
     )
     if not items:
-        embed.add_field(name="No auto replies", value="Use **Add** to create one.", inline=False)
+        embed.add_field(name="No auto replies | لا يوجد", value="Use **Add** to create one.", inline=False)
         return embed
 
-    lines = []
-    for i, r in enumerate(items[:25], start=1):
+    total = len(items)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    page = max(0, min(int(page), total_pages - 1))
+
+    start = page * page_size
+    end = min(total, start + page_size)
+
+    lines: list[str] = []
+    for idx in range(start, end):
+        r = items[idx] or {}
         enabled = "✅" if r.get("enabled", True) else "❌"
-        match_type = r.get("match", "contains")
+        match_type = _normalize_match_type(r.get("match"))
+        mode = _normalize_reply_mode(r.get("mode"))
         mention = "@" if r.get("mention", False) else "-"
-        trig = str(r.get("trigger", ""))
-        rep = str(r.get("reply", ""))
-        if len(rep) > 60:
-            rep = rep[:57] + "..."
-        lines.append(f"`{i}` {enabled} [{match_type}/{mention}] **{trig}** → {rep}")
-    embed.add_field(name="Rules", value="\n".join(lines), inline=False)
-    embed.set_footer(text=f"Server: {guild.name}")
+        case = "Aa" if r.get("case_sensitive", False) else "aa"
+        trig = str(r.get("trigger", "")).strip() or "(empty)"
+        rep = str(r.get("reply", "")).strip() or "(empty)"
+        if len(rep) > 140:
+            rep = rep[:137] + "..."
+        lines.append(f"`{idx+1}` {enabled} `[{match_type} | {mode} | {mention} | {case}]`\n**{trig}** → {rep}")
+
+    embed.add_field(
+        name=f"Rules ({start+1}-{end} / {total})",
+        value="\n\n".join(lines),
+        inline=False,
+    )
+    embed.set_footer(text=f"Server: {guild.name} • Page {page+1}/{total_pages}")
     return embed
 
 
 class AutoReplyAddModal(discord.ui.Modal):
     def __init__(self, guild_id: int):
-        super().__init__(title="Add Auto Reply")
+        super().__init__(title="Add Auto Reply | إضافة رد")
         self.guild_id = int(guild_id)
 
         self.trigger = discord.ui.TextInput(
@@ -472,12 +509,20 @@ class AutoReplyAddModal(discord.ui.Modal):
         self.add_item(self.reply)
 
         self.match = discord.ui.TextInput(
-            label="Match type: contains/exact/startswith/endswith",
+            label="Match: contains/exact/startswith/endswith",
             placeholder="contains",
             required=False,
             max_length=20,
         )
         self.add_item(self.match)
+
+        self.mode = discord.ui.TextInput(
+            label="Mode: send/reply",
+            placeholder="send",
+            required=False,
+            max_length=10,
+        )
+        self.add_item(self.mode)
 
         self.mention = discord.ui.TextInput(
             label="Mention user? yes/no",
@@ -501,7 +546,8 @@ class AutoReplyAddModal(discord.ui.Modal):
             {
                 "trigger": self.trigger.value.strip(),
                 "reply": self.reply.value.strip(),
-                "match": (self.match.value or "contains").strip().lower(),
+                "match": _normalize_match_type(self.match.value),
+                "mode": _normalize_reply_mode(self.mode.value),
                 "mention": _parse_bool_text(self.mention.value, False),
                 "case_sensitive": _parse_bool_text(self.case_sensitive.value, False),
                 "enabled": True,
@@ -509,6 +555,132 @@ class AutoReplyAddModal(discord.ui.Modal):
         )
         update_guild_config(interaction.guild_id, {"auto_replies": items})
         await interaction.response.send_message("✅ Auto reply added.", ephemeral=True)
+
+
+class AutoReplyEditModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Edit Auto Reply | تعديل رد")
+        self.guild_id = int(guild_id)
+
+        self.index = discord.ui.TextInput(
+            label="Rule number",
+            placeholder="1",
+            required=True,
+            max_length=5,
+        )
+        self.add_item(self.index)
+
+        self.trigger = discord.ui.TextInput(
+            label="Trigger (leave blank = keep)",
+            placeholder="hello",
+            required=False,
+            max_length=200,
+        )
+        self.add_item(self.trigger)
+
+        self.reply = discord.ui.TextInput(
+            label="Reply text (leave blank = keep)",
+            placeholder="welcome!",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=1500,
+        )
+        self.add_item(self.reply)
+
+        self.options = discord.ui.TextInput(
+            label="Options (optional): match=contains mode=send mention=yes case=no",
+            placeholder="match=contains mode=send mention=no case=no",
+            required=False,
+            max_length=120,
+        )
+        self.add_item(self.options)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        items = get_auto_replies_config(interaction.guild_id)
+        try:
+            idx = int(self.index.value.strip())
+        except Exception:
+            return await interaction.response.send_message("❌ Invalid number.", ephemeral=True)
+
+        if idx < 1 or idx > len(items):
+            return await interaction.response.send_message("❌ Out of range.", ephemeral=True)
+
+        i = idx - 1
+        rule = items[i] or {}
+
+        if self.trigger.value and self.trigger.value.strip():
+            rule["trigger"] = self.trigger.value.strip()
+        if self.reply.value and self.reply.value.strip():
+            rule["reply"] = self.reply.value.strip()
+
+        opt = (self.options.value or "").strip()
+        if opt:
+            # very small parser: key=value pairs
+            pairs = re.findall(r"(match|mode|mention|case)\s*=\s*([^\s]+)", opt, flags=re.IGNORECASE)
+            kv = {k.lower(): v for k, v in pairs}
+            if "match" in kv:
+                rule["match"] = _normalize_match_type(kv.get("match"))
+            if "mode" in kv:
+                rule["mode"] = _normalize_reply_mode(kv.get("mode"))
+            if "mention" in kv:
+                rule["mention"] = _parse_bool_text(kv.get("mention"), bool(rule.get("mention", False)))
+            if "case" in kv:
+                rule["case_sensitive"] = _parse_bool_text(kv.get("case"), bool(rule.get("case_sensitive", False)))
+
+        # Ensure defaults exist
+        rule["match"] = _normalize_match_type(rule.get("match"))
+        rule["mode"] = _normalize_reply_mode(rule.get("mode"))
+        rule["enabled"] = bool(rule.get("enabled", True))
+
+        items[i] = rule
+        update_guild_config(interaction.guild_id, {"auto_replies": items})
+        await interaction.response.send_message(f"✅ Updated rule {idx}.", ephemeral=True)
+
+
+class AutoReplyTestModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Test Auto Reply | اختبار")
+        self.guild_id = int(guild_id)
+        self.text = discord.ui.TextInput(
+            label="Message text to test",
+            placeholder="type something...",
+            style=discord.TextStyle.paragraph,
+            required=True,
+            max_length=1500,
+        )
+        self.add_item(self.text)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        items = get_auto_replies_config(interaction.guild_id)
+        content = self.text.value
+
+        for idx, rule in enumerate(items, start=1):
+            if not rule or not rule.get("enabled", True):
+                continue
+            trigger = str(rule.get("trigger", "")).strip()
+            reply = str(rule.get("reply", "")).strip()
+            if not trigger or not reply:
+                continue
+
+            if _matches_trigger(
+                content,
+                trigger,
+                match_type=_normalize_match_type(rule.get("match")),
+                case_sensitive=bool(rule.get("case_sensitive", False)),
+            ):
+                mention = bool(rule.get("mention", False))
+                mode = _normalize_reply_mode(rule.get("mode"))
+                preview = f"{interaction.user.mention} {reply}" if mention else reply
+                embed = discord.Embed(
+                    title="✅ Match Found",
+                    description=f"Rule: `{idx}`\nOptions: `{rule.get('match','contains')}` / `{mode}` / mention={mention}",
+                    color=discord.Color.green(),
+                )
+                embed.add_field(name="Trigger", value=trigger[:1024], inline=False)
+                embed.add_field(name="Bot would send", value=preview[:1024], inline=False)
+                return await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        await interaction.response.send_message("❌ No rule matched that text.", ephemeral=True)
 
 
 class AutoReplyIndexModal(discord.ui.Modal):
@@ -554,10 +726,11 @@ class AutoReplyPanelView(discord.ui.View):
     def __init__(self, guild_id: int):
         super().__init__(timeout=300)
         self.guild_id = int(guild_id)
+        self.page = 0
 
     async def _refresh(self, interaction: discord.Interaction):
         items = get_auto_replies_config(interaction.guild_id)
-        embed = _build_autoreply_panel_embed(interaction.guild, items)
+        embed = _build_autoreply_panel_embed(interaction.guild, items, page=self.page)
         await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="Add", style=discord.ButtonStyle.success, row=0)
@@ -565,6 +738,12 @@ class AutoReplyPanelView(discord.ui.View):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
         await interaction.response.send_modal(AutoReplyAddModal(self.guild_id))
+
+    @discord.ui.button(label="Edit", style=discord.ButtonStyle.primary, row=0)
+    async def edit_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+        await interaction.response.send_modal(AutoReplyEditModal(self.guild_id))
 
     @discord.ui.button(label="Remove", style=discord.ButtonStyle.danger, row=0)
     async def remove_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -578,7 +757,25 @@ class AutoReplyPanelView(discord.ui.View):
             return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
         await interaction.response.send_modal(AutoReplyIndexModal(self.guild_id, "toggle"))
 
-    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, row=0)
+    @discord.ui.button(label="Test", style=discord.ButtonStyle.secondary, row=1)
+    async def test_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+        await interaction.response.send_modal(AutoReplyTestModal(self.guild_id))
+
+    @discord.ui.button(label="Prev", style=discord.ButtonStyle.secondary, row=1)
+    async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.page = max(0, self.page - 1)
+        await self._refresh(interaction)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary, row=1)
+    async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        items = get_auto_replies_config(interaction.guild_id)
+        total_pages = max(1, (len(items) + 8 - 1) // 8)
+        self.page = min(total_pages - 1, self.page + 1)
+        await self._refresh(interaction)
+
+    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, row=1)
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._refresh(interaction)
 
@@ -3748,11 +3945,18 @@ async def on_message(message):
             if _matches_trigger(
                 message.content.strip(),
                 trigger,
-                match_type=str(rule.get("match", "contains")),
+                match_type=_normalize_match_type(rule.get("match")),
                 case_sensitive=bool(rule.get("case_sensitive", False)),
             ):
-                content = f"{message.author.mention} {reply}" if rule.get("mention", False) else reply
-                await message.channel.send(content, allowed_mentions=discord.AllowedMentions(users=bool(rule.get("mention", False))))
+                mention = bool(rule.get("mention", False))
+                mode = _normalize_reply_mode(rule.get("mode"))
+                content = f"{message.author.mention} {reply}" if mention else reply
+                allowed = discord.AllowedMentions(users=mention, roles=False, everyone=False, replied_user=False)
+
+                if mode == "reply":
+                    await message.reply(content, mention_author=False, allowed_mentions=allowed)
+                else:
+                    await message.channel.send(content, allowed_mentions=allowed)
                 break
     except Exception as e:
         logger.error(f"Auto reply error: {e}")
