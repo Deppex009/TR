@@ -2759,19 +2759,19 @@ class SettingsCategoryView(discord.ui.View):
 class PanelSettingsModal(discord.ui.Modal):
     """Modal for editing panel settings"""
     def __init__(self, guild_id):
-        super().__init__(title="🎨 Edit Panel Settings")
+        super().__init__(title="🎨 Panel | اللوحة")
         self.guild_id = guild_id
         guild_cfg = get_guild_config(guild_id)
         
         self.title_input = discord.ui.TextInput(
-            label="Panel Title",
+            label="Title | العنوان",
             default=guild_cfg.get("tickets", {}).get("panel_title", ""),
             max_length=256
         )
         self.add_item(self.title_input)
         
         self.desc_input = discord.ui.TextInput(
-            label="Panel Description",
+            label="Description | الوصف",
             default=guild_cfg.get("tickets", {}).get("panel_description", ""),
             style=discord.TextStyle.paragraph,
             max_length=2000
@@ -2779,7 +2779,7 @@ class PanelSettingsModal(discord.ui.Modal):
         self.add_item(self.desc_input)
         
         self.color_input = discord.ui.TextInput(
-            label="Embed Color (hex code)",
+            label="Embed color | لون الامبد",
             default=guild_cfg.get("tickets", {}).get("embed_color", ""),
             max_length=6,
             required=False
@@ -2787,7 +2787,7 @@ class PanelSettingsModal(discord.ui.Modal):
         self.add_item(self.color_input)
         
         self.image_input = discord.ui.TextInput(
-            label="Panel Image URL",
+            label="Image URL | رابط الصورة",
             default=guild_cfg.get("tickets", {}).get("panel_image", ""),
             required=False
         )
@@ -2807,9 +2807,9 @@ class PanelSettingsModal(discord.ui.Modal):
                 guild_cfg["tickets"]["panel_image"] = self.image_input.value
             
             update_guild_config(self.guild_id, guild_cfg)
-            await interaction.response.send_message("✅ Panel settings updated!", ephemeral=True)
+            await interaction.response.send_message("✅ Updated | تم تحديث إعدادات اللوحة", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class OptionsManageView(discord.ui.View):
     """View for managing ticket options"""
@@ -2849,15 +2849,15 @@ class OptionsManageView(discord.ui.View):
 
 class AddOptionModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="➕ Add New Option")
+        super().__init__(title="➕ Add Option | إضافة خيار")
         
-        self.label = discord.ui.TextInput(label="Label", placeholder="Technical Support", max_length=100)
+        self.label = discord.ui.TextInput(label="Label | الاسم", placeholder="Technical Support | دعم فني", max_length=100)
         self.add_item(self.label)
         
-        self.emoji = discord.ui.TextInput(label="Emoji", placeholder="🛠️", max_length=50)
+        self.emoji = discord.ui.TextInput(label="Emoji | ايموجي", placeholder="🛠️", max_length=50)
         self.add_item(self.emoji)
         
-        self.description = discord.ui.TextInput(label="Description", placeholder="Get technical help", max_length=100)
+        self.description = discord.ui.TextInput(label="Description | الوصف", placeholder="Get help | للحصول على مساعدة", max_length=100)
         self.add_item(self.description)
     
     async def on_submit(self, interaction: discord.Interaction):
@@ -2868,31 +2868,34 @@ class AddOptionModal(discord.ui.Modal):
                 "description": self.description.value
             })
             save_config(config)
-            await interaction.response.send_message(f"✅ Added: {self.emoji.value} {self.label.value}", ephemeral=True)
+            await interaction.response.send_message(f"✅ Added | تمت الإضافة: {self.emoji.value} {self.label.value}", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class EditOptionModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="✏️ Edit Option")
+        super().__init__(title="✏️ Edit Option | تعديل خيار")
         
-        self.number = discord.ui.TextInput(label="Option Number (1, 2, 3...)", placeholder="1", max_length=2)
+        self.number = discord.ui.TextInput(label="Option # | رقم الخيار", placeholder="1", max_length=3)
         self.add_item(self.number)
         
-        self.label = discord.ui.TextInput(label="New Label", required=False, max_length=100)
+        self.label = discord.ui.TextInput(label="New label | اسم جديد", required=False, max_length=100)
         self.add_item(self.label)
         
-        self.emoji = discord.ui.TextInput(label="New Emoji", required=False, max_length=50)
+        self.emoji = discord.ui.TextInput(label="New emoji | ايموجي جديد", required=False, max_length=50)
         self.add_item(self.emoji)
         
-        self.description = discord.ui.TextInput(label="New Description", required=False, max_length=100)
+        self.description = discord.ui.TextInput(label="New desc | وصف جديد", required=False, max_length=100)
         self.add_item(self.description)
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
             idx = int(self.number.value) - 1
             if idx < 0 or idx >= len(config["tickets"]["ticket_options"]):
-                await interaction.response.send_message(f"❌ Invalid number. Choose 1-{len(config['tickets']['ticket_options'])}", ephemeral=True)
+                await interaction.response.send_message(
+                    f"❌ Invalid number | رقم غير صحيح. Choose 1-{len(config['tickets']['ticket_options'])}",
+                    ephemeral=True,
+                )
                 return
             
             if self.label.value:
@@ -2904,39 +2907,39 @@ class EditOptionModal(discord.ui.Modal):
             
             save_config(config)
             opt = config["tickets"]["ticket_options"][idx]
-            await interaction.response.send_message(f"✅ Updated: {opt.get('emoji', '')} {opt['label']}", ephemeral=True)
+            await interaction.response.send_message(f"✅ Updated | تم التحديث: {opt.get('emoji', '')} {opt['label']}", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class RemoveOptionModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="🗑️ Remove Option")
+        super().__init__(title="🗑️ Remove | حذف")
         
-        self.number = discord.ui.TextInput(label="Option Number to Remove", placeholder="1", max_length=2)
+        self.number = discord.ui.TextInput(label="Option # | رقم الخيار", placeholder="1", max_length=3)
         self.add_item(self.number)
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
             idx = int(self.number.value) - 1
             if idx < 0 or idx >= len(config["tickets"]["ticket_options"]):
-                await interaction.response.send_message(f"❌ Invalid number", ephemeral=True)
+                await interaction.response.send_message("❌ Invalid number | رقم غير صحيح", ephemeral=True)
                 return
             
             removed = config["tickets"]["ticket_options"].pop(idx)
             save_config(config)
-            await interaction.response.send_message(f"✅ Removed: {removed.get('emoji', '')} {removed['label']}", ephemeral=True)
+            await interaction.response.send_message(f"✅ Removed | تم الحذف: {removed.get('emoji', '')} {removed['label']}", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class RolesSettingsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="👥 Roles Settings")
+        super().__init__(title="👥 Roles | الأدوار")
         
         support_roles = " ".join([str(rid) for rid in config["tickets"].get("support_roles", [])])
         ping_roles = " ".join([str(rid) for rid in config["tickets"].get("ping_roles", [])])
         
         self.support = discord.ui.TextInput(
-            label="Support Role IDs (space separated)",
+            label="Support roles | أدوار الدعم",
             placeholder="123456789 987654321",
             default=support_roles,
             required=False
@@ -2944,7 +2947,7 @@ class RolesSettingsModal(discord.ui.Modal):
         self.add_item(self.support)
         
         self.ping = discord.ui.TextInput(
-            label="Ping Role IDs (space separated)",
+            label="Ping roles | أدوار المنشن",
             placeholder="123456789 987654321",
             default=ping_roles,
             required=False
@@ -2959,9 +2962,9 @@ class RolesSettingsModal(discord.ui.Modal):
                 config["tickets"]["ping_roles"] = [int(r) for r in self.ping.value.split() if r.strip()]
             
             save_config(config)
-            await interaction.response.send_message("✅ Roles updated!", ephemeral=True)
+            await interaction.response.send_message("✅ Roles updated | تم تحديث الأدوار", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class MessagesEditView(discord.ui.View):
     """View for editing messages"""
@@ -3026,10 +3029,10 @@ class MessagesEditView(discord.ui.View):
 
 class EditButtonColorsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="🎨 Button Colors")
+        super().__init__(title="🎨 Colors | ألوان")
         
         self.close_color = discord.ui.TextInput(
-            label="Close Button Color",
+            label="Close color | لون الإغلاق",
             placeholder="danger, success, secondary, primary",
             default=config["tickets"]["buttons"].get("close_style", "danger"),
             style=discord.TextStyle.short,
@@ -3039,7 +3042,7 @@ class EditButtonColorsModal(discord.ui.Modal):
         self.add_item(self.close_color)
         
         self.claim_color = discord.ui.TextInput(
-            label="Claim Button Color",
+            label="Claim color | لون الاستلام",
             placeholder="danger, success, secondary, primary",
             default=config["tickets"]["buttons"].get("claim_style", "primary"),
             style=discord.TextStyle.short,
@@ -3049,7 +3052,7 @@ class EditButtonColorsModal(discord.ui.Modal):
         self.add_item(self.claim_color)
         
         self.ping_admin_color = discord.ui.TextInput(
-            label="Ping Admin Button Color",
+            label="Ping color | لون المنشن",
             placeholder="danger, success, secondary, primary",
             default=config["tickets"]["buttons"].get("ping_admin_style", "secondary"),
             style=discord.TextStyle.short,
@@ -3059,7 +3062,7 @@ class EditButtonColorsModal(discord.ui.Modal):
         self.add_item(self.ping_admin_color)
         
         self.mention_member_color = discord.ui.TextInput(
-            label="Mention Member Button Color",
+            label="Mention color | لون المنشن",
             placeholder="danger, success, secondary, primary",
             default=config["tickets"]["buttons"].get("mention_member_style", "secondary"),
             style=discord.TextStyle.short,
@@ -3081,15 +3084,15 @@ class EditButtonColorsModal(discord.ui.Modal):
             save_config(config)
             await interaction.response.send_message("✅ Button colors updated! | تم تحديث ألوان الأزرار", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class EditClaimModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="👥 Claim Message")
+        super().__init__(title="👥 Claim | الاستدعاء")
         
         self.claim_msg = discord.ui.TextInput(
-            label="Claim Message (use @USER)",
-            placeholder="@USER claimed the ticket",
+            label="Message (@USER) | الرسالة",
+            placeholder="@USER claimed the ticket | @USER استلم التكيت",
             default=config["tickets"]["messages"].get("claim_message", "@USER استدعى الإدارة"),
             style=discord.TextStyle.short,
             max_length=200
@@ -3097,7 +3100,7 @@ class EditClaimModal(discord.ui.Modal):
         self.add_item(self.claim_msg)
         
         self.claim_emoji = discord.ui.TextInput(
-            label="Claim Emoji",
+            label="Emoji | ايموجي",
             default=config["tickets"]["messages"].get("claim_emoji", "👥"),
             style=discord.TextStyle.short,
             max_length=100
@@ -3111,14 +3114,14 @@ class EditClaimModal(discord.ui.Modal):
             save_config(config)
             await interaction.response.send_message("✅ Claim message updated! | تم تحديث رسالة الاستدعاء", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class EditPingAdminModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="📢 Ping Admin Button")
+        super().__init__(title="📢 Ping Admin | زر المنشن")
         
         self.ping_admin_label = discord.ui.TextInput(
-            label="Button Text",
+            label="Button text | نص الزر",
             default=config["tickets"]["buttons"].get("ping_admin", "استدعاء الإدارة"),
             style=discord.TextStyle.short,
             max_length=80
@@ -3126,7 +3129,7 @@ class EditPingAdminModal(discord.ui.Modal):
         self.add_item(self.ping_admin_label)
         
         self.ping_admin_emoji = discord.ui.TextInput(
-            label="Button Emoji (ID or emoji)",
+            label="Emoji | ايموجي",
             default=config["tickets"]["buttons"].get("ping_admin_emoji", "📢"),
             style=discord.TextStyle.short,
             max_length=100
@@ -3134,7 +3137,7 @@ class EditPingAdminModal(discord.ui.Modal):
         self.add_item(self.ping_admin_emoji)
         
         self.ping_admin_message = discord.ui.TextInput(
-            label="Message (use @ADMIN for roles)",
+            label="Message (@ADMIN) | الرسالة",
             placeholder="تم استدعاء الإدارة @ADMIN",
             default=config["tickets"]["messages"].get("ping_admin_message", "تم استدعاء الإدارة @ADMIN"),
             style=discord.TextStyle.paragraph,
@@ -3150,14 +3153,14 @@ class EditPingAdminModal(discord.ui.Modal):
             save_config(config)
             await interaction.response.send_message("✅ Ping Admin button updated! | تم تحديث زر الاستدعاء", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class EditMentionMemberModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="👥 Mention Member Button")
+        super().__init__(title="👥 Mention | منشن العضو")
         
         self.mention_member_label = discord.ui.TextInput(
-            label="Button Text",
+            label="Button text | نص الزر",
             default=config["tickets"]["buttons"].get("mention_member", "منشن العضو"),
             style=discord.TextStyle.short,
             max_length=80
@@ -3165,7 +3168,7 @@ class EditMentionMemberModal(discord.ui.Modal):
         self.add_item(self.mention_member_label)
         
         self.mention_member_emoji = discord.ui.TextInput(
-            label="Button Emoji (ID or emoji)",
+            label="Emoji | ايموجي",
             default=config["tickets"]["buttons"].get("mention_member_emoji", "👤"),
             style=discord.TextStyle.short,
             max_length=100
@@ -3173,7 +3176,7 @@ class EditMentionMemberModal(discord.ui.Modal):
         self.add_item(self.mention_member_emoji)
         
         self.mention_member_message = discord.ui.TextInput(
-            label="Message (use @MEMBER for user)",
+            label="Message (@MEMBER) | الرسالة",
             placeholder="@MEMBER تفضل",
             default=config["tickets"]["messages"].get("mention_member_message", "@MEMBER تفضل"),
             style=discord.TextStyle.paragraph,
@@ -3189,14 +3192,14 @@ class EditMentionMemberModal(discord.ui.Modal):
             save_config(config)
             await interaction.response.send_message("✅ Mention Member button updated! | تم تحديث زر منشن العضو", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class EditButtonsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="🔘 Button Settings")
+        super().__init__(title="🔘 Buttons | الأزرار")
         
         self.close_btn = discord.ui.TextInput(
-            label="Close Button Text",
+            label="Close text | نص الإغلاق",
             default=config["tickets"]["buttons"].get("close", "CLOSE"),
             style=discord.TextStyle.short,
             max_length=80
@@ -3204,7 +3207,7 @@ class EditButtonsModal(discord.ui.Modal):
         self.add_item(self.close_btn)
         
         self.close_emoji = discord.ui.TextInput(
-            label="Close Emoji (ID or emoji)",
+            label="Close emoji | ايموجي الإغلاق",
             default=config["tickets"]["buttons"].get("close_emoji", "🔒"),
             style=discord.TextStyle.short,
             max_length=100
@@ -3212,7 +3215,7 @@ class EditButtonsModal(discord.ui.Modal):
         self.add_item(self.close_emoji)
         
         self.claim_btn = discord.ui.TextInput(
-            label="Claim Button Text",
+            label="Claim text | نص الاستلام",
             default=config["tickets"]["buttons"].get("claim", "CLAIM"),
             style=discord.TextStyle.short,
             max_length=80
@@ -3220,7 +3223,7 @@ class EditButtonsModal(discord.ui.Modal):
         self.add_item(self.claim_btn)
         
         self.claim_btn_emoji = discord.ui.TextInput(
-            label="Claim Emoji (ID or emoji)",
+            label="Claim emoji | ايموجي الاستلام",
             default=config["tickets"]["buttons"].get("claim_emoji", "👥"),
             style=discord.TextStyle.short,
             max_length=100
@@ -3236,14 +3239,14 @@ class EditButtonsModal(discord.ui.Modal):
             save_config(config)
             await interaction.response.send_message("✅ Button settings updated! | تم تحديث إعدادات الأزرار", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class EditLabelsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="📄 Text Labels")
+        super().__init__(title="📄 Text | النصوص")
         
         self.reason_field = discord.ui.TextInput(
-            label="Reason Field Name",
+            label="Reason name | اسم السبب",
             default=config["tickets"]["messages"].get("reason_field_name", "REASON:"),
             style=discord.TextStyle.short,
             max_length=100
@@ -3251,7 +3254,7 @@ class EditLabelsModal(discord.ui.Modal):
         self.add_item(self.reason_field)
         
         self.by_label = discord.ui.TextInput(
-            label="By Label",
+            label="By label | بواسطة",
             default=config["tickets"]["messages"].get("ticket_by_label", "بواسطة"),
             style=discord.TextStyle.short,
             max_length=100
@@ -3259,7 +3262,7 @@ class EditLabelsModal(discord.ui.Modal):
         self.add_item(self.by_label)
         
         self.by_emoji = discord.ui.TextInput(
-            label="By Emoji",
+            label="By emoji | ايموجي",
             default=config["tickets"]["messages"].get("by_emoji", "👤"),
             style=discord.TextStyle.short,
             max_length=100
@@ -3274,14 +3277,14 @@ class EditLabelsModal(discord.ui.Modal):
             save_config(config)
             await interaction.response.send_message("✅ Text labels updated! | تم تحديث النصوص", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class EditPlaceholdersModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="💬 Placeholders")
+        super().__init__(title="💬 Placeholders | العبارات")
         
         self.dropdown_ph = discord.ui.TextInput(
-            label="Dropdown Placeholder",
+            label="Dropdown placeholder | عبارة القائمة",
             default=config["tickets"].get("dropdown_placeholder", "إضغط لفتح التكيت"),
             style=discord.TextStyle.short,
             max_length=150
@@ -3289,7 +3292,7 @@ class EditPlaceholdersModal(discord.ui.Modal):
         self.add_item(self.dropdown_ph)
         
         self.menu_ph = discord.ui.TextInput(
-            label="Menu Placeholder",
+            label="Menu placeholder | عبارة القائمة",
             default=config["tickets"].get("menu_placeholder", "تحديل التكيت"),
             style=discord.TextStyle.short,
             max_length=150
@@ -3297,7 +3300,7 @@ class EditPlaceholdersModal(discord.ui.Modal):
         self.add_item(self.menu_ph)
         
         self.modal_title = discord.ui.TextInput(
-            label="Modal Title",
+            label="Modal title | عنوان النافذة",
             default=config["tickets"]["messages"].get("modal_title", "MODAL TITLE"),
             style=discord.TextStyle.short,
             max_length=100
@@ -3305,7 +3308,7 @@ class EditPlaceholdersModal(discord.ui.Modal):
         self.add_item(self.modal_title)
         
         self.ticket_desc = discord.ui.TextInput(
-            label="Ticket Description",
+            label="Ticket desc | وصف التكيت",
             default=config["tickets"]["messages"].get("ticket_created_desc", "YOUR MESSAGE HERE"),
             style=discord.TextStyle.paragraph,
             max_length=500
@@ -3321,14 +3324,14 @@ class EditPlaceholdersModal(discord.ui.Modal):
             save_config(config)
             await interaction.response.send_message("✅ Placeholders updated! | تم تحديث العبارات", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class EditSuccessMessageModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="✅ Success Message")
+        super().__init__(title="✅ Success | رسالة النجاح")
         
         self.success_msg = discord.ui.TextInput(
-            label="Ticket Created Message (Only you see)",
+            label="Created msg (you) | رسالة النجاح",
             placeholder="✅ تم فتح التكيت",
             default=config["tickets"]["messages"].get("ticket_created_success", "✅ تم فتح التكيت"),
             style=discord.TextStyle.short,
@@ -3342,35 +3345,35 @@ class EditSuccessMessageModal(discord.ui.Modal):
             save_config(config)
             await interaction.response.send_message("✅ Success message updated! | تم تحديث رسالة النجاح", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class MessagesSettingsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="📝 Messages & Text (1/2)")
+        super().__init__(title="📝 Messages | الرسائل (1/2)")
         
         self.dropdown_ph = discord.ui.TextInput(
-            label="Dropdown Placeholder",
+            label="Dropdown placeholder | عبارة القائمة",
             default=config["tickets"].get("dropdown_placeholder", ""),
             required=False
         )
         self.add_item(self.dropdown_ph)
         
         self.menu_ph = discord.ui.TextInput(
-            label="Menu Placeholder",
+            label="Menu placeholder | عبارة القائمة",
             default=config["tickets"].get("menu_placeholder", ""),
             required=False
         )
         self.add_item(self.menu_ph)
         
         self.modal_title = discord.ui.TextInput(
-            label="Modal Title (reason window)",
+            label="Modal title | عنوان النافذة",
             default=config["tickets"]["messages"].get("modal_title", ""),
             required=False
         )
         self.add_item(self.modal_title)
         
         self.ticket_desc = discord.ui.TextInput(
-            label="Ticket Created Description",
+            label="Ticket desc | وصف التذكرة",
             default=config["tickets"]["messages"].get("ticket_created_desc", ""),
             style=discord.TextStyle.paragraph,
             required=False
@@ -3394,14 +3397,14 @@ class MessagesSettingsModal(discord.ui.Modal):
             modal2 = MessagesSettingsModal2()
             await interaction.response.send_modal(modal2)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class MessagesSettingsModal2(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="📝 Messages (2/3)")
+        super().__init__(title="📝 Messages | الرسائل (2/3)")
         
         self.reason_field = discord.ui.TextInput(
-            label="Reason Field Name",
+            label="Reason name | اسم السبب",
             default=config["tickets"]["messages"].get("reason_field_name", "REASON:"),
             style=discord.TextStyle.short,
             required=False,
@@ -3410,8 +3413,8 @@ class MessagesSettingsModal2(discord.ui.Modal):
         self.add_item(self.reason_field)
         
         self.claim_msg = discord.ui.TextInput(
-            label="Claim Message (use @USER)",
-            placeholder="@USER claimed the ticket",
+            label="Claim msg (@USER) | رسالة الاستلام",
+            placeholder="@USER claimed | @USER استلم",
             default=config["tickets"]["messages"].get("claim_message", ""),
             style=discord.TextStyle.short,
             required=False,
@@ -3420,7 +3423,7 @@ class MessagesSettingsModal2(discord.ui.Modal):
         self.add_item(self.claim_msg)
         
         self.claim_emoji = discord.ui.TextInput(
-            label="Claim Emoji",
+            label="Claim emoji | ايموجي",
             default=config["tickets"]["messages"].get("claim_emoji", "👥"),
             style=discord.TextStyle.short,
             max_length=20,
@@ -3429,7 +3432,7 @@ class MessagesSettingsModal2(discord.ui.Modal):
         self.add_item(self.claim_emoji)
         
         self.by_label = discord.ui.TextInput(
-            label="By Label",
+            label="By label | بواسطة",
             default=config["tickets"]["messages"].get("ticket_by_label", "بواسطة"),
             style=discord.TextStyle.short,
             required=False,
@@ -3454,14 +3457,14 @@ class MessagesSettingsModal2(discord.ui.Modal):
             modal3 = MessagesSettingsModal3()
             await interaction.response.send_modal(modal3)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class MessagesSettingsModal3(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="📝 Buttons (3/3)")
+        super().__init__(title="📝 Buttons | الأزرار (3/3)")
         
         self.ticket_num_text = discord.ui.TextInput(
-            label="Ticket Number Text",
+            label="Ticket num | رقم التذكرة",
             default=config["tickets"]["messages"].get("ticket_number_text", "تم فتح التكيت"),
             style=discord.TextStyle.short,
             required=False,
@@ -3470,7 +3473,7 @@ class MessagesSettingsModal3(discord.ui.Modal):
         self.add_item(self.ticket_num_text)
         
         self.close_btn = discord.ui.TextInput(
-            label="Close Button Text",
+            label="Close text | نص الإغلاق",
             default=config["tickets"]["buttons"].get("close", "CLOSE"),
             style=discord.TextStyle.short,
             required=False,
@@ -3479,7 +3482,7 @@ class MessagesSettingsModal3(discord.ui.Modal):
         self.add_item(self.close_btn)
         
         self.close_emoji = discord.ui.TextInput(
-            label="Close Button Emoji",
+            label="Close emoji | ايموجي",
             default=config["tickets"]["buttons"].get("close_emoji", "🔒"),
             style=discord.TextStyle.short,
             max_length=20,
@@ -3488,7 +3491,7 @@ class MessagesSettingsModal3(discord.ui.Modal):
         self.add_item(self.close_emoji)
         
         self.claim_btn = discord.ui.TextInput(
-            label="Claim Button Text",
+            label="Claim text | نص الاستلام",
             default=config["tickets"]["buttons"].get("claim", "CLAIM"),
             style=discord.TextStyle.short,
             required=False,
@@ -3508,9 +3511,12 @@ class MessagesSettingsModal3(discord.ui.Modal):
                 config["tickets"]["buttons"]["claim"] = self.claim_btn.value
             
             save_config(config)
-            await interaction.response.send_message("✅ All settings updated! Use /ticket_log_channel to set log channel.", ephemeral=True)
+            await interaction.response.send_message(
+                "✅ Updated | تم تحديث كل الإعدادات. Use /ticket_log_channel | استخدم /ticket_log_channel لتحديد قناة السجل.",
+                ephemeral=True,
+            )
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class MenuOptionsView(discord.ui.View):
     def __init__(self):
@@ -3596,9 +3602,12 @@ class EditMenuOptionModal(discord.ui.Modal):
                 config["tickets"]["menu_options"][self.option_key]["description"] = self.description.value
             
             save_config(config)
-            await interaction.response.send_message(f"✅ Updated {self.option_key.replace('_', ' ')}!", ephemeral=True)
+            await interaction.response.send_message(
+                f"✅ Updated | تم تحديث: {self.option_key.replace('_', ' ')}",
+                ephemeral=True,
+            )
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 # ============================================================
 # MODERATION SYSTEM
@@ -3653,12 +3662,12 @@ def get_mod_config(guild_id):
         "kick_dm": "تم طردك من **{server}**.\nالسبب: {reason}\n\nYou have been kicked from **{server}**.\nReason: {reason}",
         "warn_dm": "تم تحذيرك في **{server}**.\nالسبب: {reason}\n\nYou have been warned in **{server}**.\nReason: {reason}",
         "timeout_dm": "تم إعطاؤك مهلة (Timeout) في **{server}**.\nالمدة: {duration}\nالسبب: {reason}\n\nYou have been timed out in **{server}**.\nDuration: {duration}\nReason: {reason}",
-        "ban_log": "🔨 **User Banned**",
-        "kick_log": "👢 **User Kicked**",
-        "warn_log": "⚠️ **User Warned**",
-        "timeout_log": "⏱️ **User Timed Out**",
-        "channel_locked": "🔒 **Channel Locked**",
-        "channel_unlocked": "🔓 **Channel Unlocked**",
+        "ban_log": "🔨 **User Banned | تم الحظر**",
+        "kick_log": "👢 **User Kicked | تم الطرد**",
+        "warn_log": "⚠️ **User Warned | تم التحذير**",
+        "timeout_log": "⏱️ **User Timed Out | تم الإعطاء مهلة**",
+        "channel_locked": "🔒 **Channel Locked | تم قفل القناة**",
+        "channel_unlocked": "🔓 **Channel Unlocked | تم فتح القناة**",
     }
     for key, value in default_messages.items():
         if key not in mod_cfg["messages"]:
@@ -3705,8 +3714,8 @@ def build_mod_dm_embed(action, guild, moderator, reason, duration=None):
     template = mod_cfg.get("messages", {}).get(f"{action}_dm", "{reason}")
     description = template.format(
         server=guild.name,
-        reason=reason or "No reason provided",
-        duration=duration or "N/A",
+        reason=reason or "No reason | بدون سبب",
+        duration=duration or "N/A | غير محدد",
         moderator=str(moderator),
     )
 
@@ -3786,14 +3795,14 @@ async def send_mod_log(guild, action, moderator, target, reason, duration=None):
         )
 
         if isinstance(target, discord.abc.GuildChannel):
-            embed.add_field(name="Channel", value=f"{target.mention} ({target.id})", inline=True)
+            embed.add_field(name="Channel | القناة", value=f"{target.mention} ({target.id})", inline=True)
         else:
-            embed.add_field(name="User", value=f"{target.mention} ({target.id})", inline=True)
+            embed.add_field(name="User | العضو", value=f"{target.mention} ({target.id})", inline=True)
 
-        embed.add_field(name="Moderator", value=f"{moderator.mention}", inline=True)
+        embed.add_field(name="Moderator | المشرف", value=f"{moderator.mention}", inline=True)
         if duration:
-            embed.add_field(name="Duration", value=duration, inline=True)
-        embed.add_field(name="Reason", value=reason or "No reason provided", inline=False)
+            embed.add_field(name="Duration | المدة", value=duration, inline=True)
+        embed.add_field(name="Reason | السبب", value=reason or "No reason | بدون سبب", inline=False)
         embed.set_footer(text=guild.name)
         
         await channel.send(embed=embed)
@@ -3807,7 +3816,7 @@ async def ban_user(interaction: discord.Interaction, user: discord.Member = None
     try:
         if not user:
             help_embed = discord.Embed(
-                title="Command: ban",
+                title="Command: ban | أمر: حظر",
                 description="**حظر المحتجر**\n**الأختصارات**\n`#حظر -حظر- طرد- حظرتلقائي- طرد- بفك`\n**الاستخدام**\n`/ban [user] (time m/h/d/mo/y) (reason)`\n\n**أمثلة للأمر:**\n`/ban @user`\n`/ban @user spamming`\n`/ban @user 1h spamming`\n`/ban @user 1d breaking rules`\n`/ban @user 1w advertising`",
                 color=discord.Color.red()
             )
@@ -3819,7 +3828,7 @@ async def ban_user(interaction: discord.Interaction, user: discord.Member = None
         mod_cfg = get_mod_config(interaction.guild_id)
         if not is_mod_authorized(interaction.user, mod_cfg, action="ban"):
             return await interaction.response.send_message(
-                "❌ You are not allowed to use moderation commands in this server.",
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
                 ephemeral=True,
             )
         
@@ -3853,7 +3862,7 @@ async def kick_user(interaction: discord.Interaction, user: discord.Member = Non
     try:
         if not user:
             help_embed = discord.Embed(
-                title="Command: kick",
+                title="Command: kick | أمر: طرد",
                 description="**طرد العضو**\n**الأختصارات**\n`#طرد -طرد- كيك- طرد- إطرد`\n**الاستخدام**\n`/kick [user] (reason)`\n\n**أمثلة للأمر:**\n`/kick @user`\n`/kick @user spamming`\n`/kick @user inappropriate behavior`\n`/kick @user breaking rules`",
                 color=discord.Color.orange()
             )
@@ -3865,7 +3874,7 @@ async def kick_user(interaction: discord.Interaction, user: discord.Member = Non
         mod_cfg = get_mod_config(interaction.guild_id)
         if not is_mod_authorized(interaction.user, mod_cfg, action="kick"):
             return await interaction.response.send_message(
-                "❌ You are not allowed to use moderation commands in this server.",
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
                 ephemeral=True,
             )
         
@@ -3899,25 +3908,31 @@ async def timeout_user(interaction: discord.Interaction, user: discord.Member = 
     try:
         if not user or not duration:
             help_embed = discord.Embed(
-                title="Command: timeout",
+                title="Command: timeout | أمر: مهلة",
                 description="**مهلة العضو**\n**الأختصارات**\n`#مهلة -مهلة- ميوت- كتم- صامت`\n**الاستخدام**\n`/timeout [user] [duration] (reason)`\n\n**أمثلة للأمر:**\n`/timeout @user 10` (10 minutes)\n`/timeout @user 10 spamming`\n`/timeout @user 60 trolling`\n`/timeout @user 1440 breaking rules` (1 day)\n\n**Duration in minutes**",
                 color=discord.Color.yellow()
             )
             return await interaction.response.send_message(embed=help_embed, ephemeral=True)
         
         if not interaction.user.guild_permissions.moderate_members:
-            return await interaction.response.send_message("❌ You don't have permission to timeout members", ephemeral=True)
+            return await interaction.response.send_message(
+                "❌ No permission | ليس لديك صلاحية لإعطاء مهلة",
+                ephemeral=True,
+            )
         
         mod_cfg = get_mod_config(interaction.guild_id)
         if not is_mod_authorized(interaction.user, mod_cfg, action="timeout"):
             return await interaction.response.send_message(
-                "❌ You are not allowed to use moderation commands in this server.",
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
                 ephemeral=True,
             )
 
         # Discord timeout max is 28 days (40320 minutes)
         if duration < 1 or duration > 40320:
-            return await interaction.response.send_message("❌ Duration must be between 1 and 40320 minutes (28 days)", ephemeral=True)
+            return await interaction.response.send_message(
+                "❌ Duration 1-40320 min | المدة بين 1 و 40320 دقيقة (28 يوم)",
+                ephemeral=True,
+            )
 
         # Timeout user first
         await user.timeout(discord.utils.utcnow() + timedelta(minutes=duration), reason=reason)
@@ -3941,7 +3956,7 @@ async def timeout_user(interaction: discord.Interaction, user: discord.Member = 
         
         await send_mod_log(interaction.guild, "timeout", interaction.user, user, reason, f"{duration} minutes")
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 @bot.tree.command(name="warn", description="Warn a user | تحذير عضو")
 @app_commands.describe(user="The user to warn", reason="Reason for warning")
@@ -3950,7 +3965,7 @@ async def warn_user(interaction: discord.Interaction, user: discord.Member = Non
     try:
         if not user:
             help_embed = discord.Embed(
-                title="Command: warn",
+                title="Command: warn | أمر: تحذير",
                 description="**تحذير العضو**\n**الأختصارات**\n`#تحذير -تحذير- وارن- انذار- إنذار`\n**الاستخدام**\n`/warn [user] (reason)`\n\n**أمثلة للأمر:**\n`/warn @user`\n`/warn @user be respectful`\n`/warn @user stop spamming`\n`/warn @user read the rules`",
                 color=discord.Color.gold()
             )
@@ -3962,7 +3977,7 @@ async def warn_user(interaction: discord.Interaction, user: discord.Member = Non
         mod_cfg = get_mod_config(interaction.guild_id)
         if not is_mod_authorized(interaction.user, mod_cfg, action="warn"):
             return await interaction.response.send_message(
-                "❌ You are not allowed to use moderation commands in this server.",
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
                 ephemeral=True,
             )
         
@@ -3998,7 +4013,7 @@ async def lock_channel(interaction: discord.Interaction, channel: discord.TextCh
         mod_cfg = get_mod_config(interaction.guild_id)
         if not is_mod_authorized(interaction.user, mod_cfg, action="lock"):
             return await interaction.response.send_message(
-                "❌ You are not allowed to use moderation commands in this server.",
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
                 ephemeral=True,
             )
         
@@ -4026,7 +4041,7 @@ async def unlock_channel(interaction: discord.Interaction, channel: discord.Text
         mod_cfg = get_mod_config(interaction.guild_id)
         if not is_mod_authorized(interaction.user, mod_cfg, action="unlock"):
             return await interaction.response.send_message(
-                "❌ You are not allowed to use moderation commands in this server.",
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
                 ephemeral=True,
             )
         
@@ -4054,7 +4069,7 @@ async def clear_messages(interaction: discord.Interaction, amount: int | None = 
         mod_cfg = get_mod_config(interaction.guild_id)
         if not is_mod_authorized(interaction.user, mod_cfg, action="clear"):
             return await interaction.response.send_message(
-                "❌ You are not allowed to use moderation commands in this server.",
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
                 ephemeral=True,
             )
         
@@ -4691,20 +4706,23 @@ class TimeoutSettingsModal(discord.ui.Modal):
                 }
             
             update_guild_config(interaction.guild_id, guild_cfg)
-            msg = f"✅ Timeout settings updated!"
+            msg = "✅ Timeout settings updated | تم تحديث إعدادات المهلة"
             if self.shortcut.value:
-                msg += f"\n**Shortcut:** Type `{self.shortcut.value}` + mention user + duration (e.g., `{self.shortcut.value} @user 10m reason`)"
+                msg += (
+                    f"\n**Shortcut | اختصار:** `{self.shortcut.value}` + @user + duration | المدة"
+                    f"\nExample | مثال: `{self.shortcut.value} @user 10m reason`"
+                )
             await interaction.response.send_message(msg, ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
 class ChannelLockUnlockSettingsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="🔒 Lock/Unlock Shortcuts")
+        super().__init__(title="🔒 Lock/Unlock | قفل/فتح")
 
         self.lock_shortcut = discord.ui.TextInput(
-            label="Lock shortcut (e.g., c, lock)",
+            label="Lock shortcut | اختصار القفل",
             placeholder="c",
             style=discord.TextStyle.short,
             required=False,
@@ -4713,7 +4731,7 @@ class ChannelLockUnlockSettingsModal(discord.ui.Modal):
         self.add_item(self.lock_shortcut)
 
         self.unlock_shortcut = discord.ui.TextInput(
-            label="Unlock shortcut (e.g., uc, unlock)",
+            label="Unlock shortcut | اختصار الفتح",
             placeholder="uc",
             style=discord.TextStyle.short,
             required=False,
@@ -4748,24 +4766,24 @@ class ChannelLockUnlockSettingsModal(discord.ui.Modal):
 
             if not updated:
                 return await interaction.response.send_message(
-                    "✅ No shortcuts set (leave blank to keep current).",
+                    "✅ No changes | لا يوجد تغيير (اتركه فارغًا للحفاظ على الحالي)",
                     ephemeral=True,
                 )
             await interaction.response.send_message(
-                "✅ Updated shortcuts:\n" + "\n".join(updated),
+                "✅ Updated shortcuts | تم تحديث الاختصارات:\n" + "\n".join(updated),
                 ephemeral=True,
             )
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
 class ModAccessRoleModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="🛡️ Moderation Access Role")
+        super().__init__(title="🛡️ Access Role | دور الصلاحية")
 
         self.role = discord.ui.TextInput(
-            label="Role mentions or IDs (blank = disable)",
-            placeholder="@Mods @Staff or 1234567890 987654321",
+            label="Roles (mentions/IDs) | الأدوار",
+            placeholder="@Mods @Staff أو 1234567890 987654321",
             style=discord.TextStyle.short,
             required=False,
             max_length=80,
@@ -4784,14 +4802,17 @@ class ModAccessRoleModal(discord.ui.Modal):
                 guild_cfg["moderation"]["allowed_role_ids"] = []
                 update_guild_config(interaction.guild_id, guild_cfg)
                 return await interaction.response.send_message(
-                    "✅ Role gate disabled (anyone with Discord permissions can use mod commands).",
+                    "✅ Role gate disabled | تم تعطيل قفل الأدوار (من لديه صلاحيات ديسكورد يمكنه استخدام الأوامر).",
                     ephemeral=True,
                 )
 
             # Accept multiple <@&id> mentions or plain numeric IDs
             ids = [int(x) for x in re.findall(r"(\d{5,})", raw)]
             if not ids:
-                return await interaction.response.send_message("❌ Invalid roles. Use role mentions or IDs.", ephemeral=True)
+                return await interaction.response.send_message(
+                    "❌ Invalid roles | أدوار غير صحيحة (استخدم منشن/ID)",
+                    ephemeral=True,
+                )
 
             # Validate roles exist
             valid_ids = []
@@ -4803,30 +4824,33 @@ class ModAccessRoleModal(discord.ui.Modal):
                     valid_mentions.append(role_obj.mention)
 
             if not valid_ids:
-                return await interaction.response.send_message("❌ Roles not found in this server.", ephemeral=True)
+                return await interaction.response.send_message(
+                    "❌ Roles not found | الأدوار غير موجودة في هذا السيرفر",
+                    ephemeral=True,
+                )
 
             guild_cfg["moderation"]["allowed_role_id"] = None
             guild_cfg["moderation"]["allowed_role_ids"] = list(dict.fromkeys(valid_ids))
             update_guild_config(interaction.guild_id, guild_cfg)
 
             await interaction.response.send_message(
-                "✅ Allowed roles updated (admins bypass): " + " ".join(valid_mentions),
+                "✅ Allowed roles updated | تم تحديث الأدوار المسموحة (الأدمن يتجاوز): " + " ".join(valid_mentions),
                 ephemeral=True,
             )
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class ModMessagesModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="Moderation Messages")
+        super().__init__(title="Moderation Msg | رسائل الإدارة")
         guild_cfg = get_guild_config(None)
         mod_cfg = guild_cfg.get("moderation", {})
         msgs = mod_cfg.get("messages", {})
         
-        self.ban_dm = discord.ui.TextInput(label="Ban DM Message", default=msgs.get("ban_dm", ""), style=discord.TextStyle.paragraph, required=False)
+        self.ban_dm = discord.ui.TextInput(label="Ban DM | رسالة الحظر", default=msgs.get("ban_dm", ""), style=discord.TextStyle.paragraph, required=False)
         self.add_item(self.ban_dm)
         
-        self.kick_dm = discord.ui.TextInput(label="Kick DM Message", default=msgs.get("kick_dm", ""), style=discord.TextStyle.paragraph, required=False)
+        self.kick_dm = discord.ui.TextInput(label="Kick DM | رسالة الطرد", default=msgs.get("kick_dm", ""), style=discord.TextStyle.paragraph, required=False)
         self.add_item(self.kick_dm)
     
     async def on_submit(self, interaction: discord.Interaction):
@@ -4843,15 +4867,15 @@ class ModMessagesModal(discord.ui.Modal):
                 guild_cfg["moderation"]["messages"]["kick_dm"] = self.kick_dm.value
             
             update_guild_config(interaction.guild_id, guild_cfg)
-            await interaction.response.send_message("✅ Moderation messages updated!", ephemeral=True)
+            await interaction.response.send_message("✅ Updated | تم تحديث رسائل الإدارة", ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 class ModLogModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="Set Log Channel")
+        super().__init__(title="Log Channel | قناة السجل")
         
-        self.channel = discord.ui.TextInput(label="Log Channel ID", placeholder="1234567890", required=False)
+        self.channel = discord.ui.TextInput(label="Log channel ID | معرف", placeholder="1234567890", required=False)
         self.add_item(self.channel)
     
     async def on_submit(self, interaction: discord.Interaction):
@@ -4862,9 +4886,12 @@ class ModLogModal(discord.ui.Modal):
             
             guild_cfg["moderation"]["mod_log_channel"] = self.channel.value
             update_guild_config(interaction.guild_id, guild_cfg)
-            await interaction.response.send_message(f"✅ Log channel set to <#{self.channel.value}>", ephemeral=True)
+            await interaction.response.send_message(
+                f"✅ Log channel set | تم تعيين قناة السجل: <#{self.channel.value}>",
+                ephemeral=True,
+            )
         except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
 class ClearSettingsModal(discord.ui.Modal):
@@ -4933,11 +4960,14 @@ async def mod_setup(interaction: discord.Interaction):
     """Open moderation settings panel"""
     try:
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ You need Administrator permission", ephemeral=True)
+            return await interaction.response.send_message(
+                "❌ Administrator required | تحتاج صلاحية المدير",
+                ephemeral=True,
+            )
         
         view = ModSettingsView()
         embed = discord.Embed(
-            title="⚙️ Moderation Settings Panel",
+            title="⚙️ Moderation Settings | إعدادات الإشراف",
             description=(
                 "**Configure actions + shortcuts (English/Arabic):**\n"
                 "**إعداد الأوامر + الاختصارات (عربي/إنجليزي):**\n\n"
@@ -4965,7 +4995,10 @@ async def mod_setup(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="set_mod_color", description="Set embed color for moderation DMs/messages | تعيين لون الإيمبد")
-@app_commands.describe(action="Which action", color="Color name or hex: #FF0000 / 0xFF0000 / FF0000")
+@app_commands.describe(
+    action="Action | العملية",
+    color="Color | اللون: #FF0000 / 0xFF0000 / FF0000",
+)
 @app_commands.choices(
     action=[
         app_commands.Choice(name="ban", value="ban"),
@@ -4983,7 +5016,7 @@ async def set_mod_color(interaction: discord.Interaction, action: app_commands.C
             parsed_color = parse_color(color)
         except Exception:
             return await interaction.response.send_message(
-                "❌ Invalid color. Use a name (red/blue/...) or hex like #FF0000",
+                "❌ Invalid color | لون غير صحيح. Use name (red/blue) أو hex مثل #FF0000",
                 ephemeral=True,
             )
 
@@ -4997,8 +5030,8 @@ async def set_mod_color(interaction: discord.Interaction, action: app_commands.C
         update_guild_config(interaction.guild_id, guild_cfg)
 
         preview = discord.Embed(
-            title=f"✅ Updated color: {action.value}",
-            description=f"Saved: `{color}`",
+            title=f"✅ Updated color | تم تحديث اللون: {action.value}",
+            description=f"Saved | تم الحفظ: `{color}`",
             color=parsed_color,
         )
         await interaction.response.send_message(embed=preview, ephemeral=True)
@@ -5019,7 +5052,7 @@ async def dm_command(interaction: discord.Interaction, user: discord.User, messa
         mod_cfg = get_mod_config(interaction.guild_id)
         if not is_mod_authorized(interaction.user, mod_cfg, action="dm"):
             return await interaction.response.send_message(
-                "❌ You are not allowed to use moderation commands in this server.",
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
                 ephemeral=True,
             )
 
@@ -5061,7 +5094,7 @@ async def say_command(
         mod_cfg = get_mod_config(interaction.guild_id)
         if not is_mod_authorized(interaction.user, mod_cfg, action="say"):
             return await interaction.response.send_message(
-                "❌ You are not allowed to use moderation commands in this server.",
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
                 ephemeral=True,
             )
 
@@ -5073,33 +5106,36 @@ async def say_command(
 
         if mention_value == "user":
             if not user:
-                return await interaction.response.send_message("❌ Please provide a user to mention", ephemeral=True)
+                return await interaction.response.send_message("❌ Provide a user | يرجى تحديد عضو", ephemeral=True)
             content = user.mention
             allowed_mentions = discord.AllowedMentions(users=True, everyone=False, roles=False)
         elif mention_value in ("everyone", "here"):
             if not interaction.user.guild_permissions.mention_everyone and not interaction.user.guild_permissions.administrator:
-                return await interaction.response.send_message("❌ You need Mention Everyone permission", ephemeral=True)
+                return await interaction.response.send_message(
+                    "❌ Mention Everyone required | تحتاج صلاحية المنشن للجميع",
+                    ephemeral=True,
+                )
             content = "@everyone" if mention_value == "everyone" else "@here"
             allowed_mentions = discord.AllowedMentions(everyone=True, users=False, roles=False)
 
         final_message = f"{content}\n{message}" if content else message
         await target_channel.send(final_message, allowed_mentions=allowed_mentions)
-        await interaction.response.send_message("✅ Sent", ephemeral=True)
+        await interaction.response.send_message("✅ Sent | تم الإرسال", ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
 @bot.tree.command(name="embed", description="Create and send an embed | إنشاء وإرسال إيمبد")
 @app_commands.describe(
-    channel="Channel to send in (optional)",
-    title="Embed title (optional)",
-    description="Embed description/text (optional)",
-    color="Color name or hex (optional)",
-    image="Upload image (optional)",
-    thumbnail="Upload thumbnail (optional)",
-    image_url="Image URL (optional)",
-    thumbnail_url="Thumbnail URL (optional)",
-    footer="Footer text (optional)",
+    channel="Channel (optional) | القناة (اختياري)",
+    title="Title (optional) | العنوان (اختياري)",
+    description="Text (optional) | الوصف (اختياري)",
+    color="Color (optional) | اللون (اختياري)",
+    image="Upload image (optional) | ارفع صورة",
+    thumbnail="Upload thumbnail (optional) | ارفع صورة صغيرة",
+    image_url="Image URL (optional) | رابط الصورة",
+    thumbnail_url="Thumbnail URL (optional) | رابط المصغرة",
+    footer="Footer (optional) | الفوتر",
 )
 async def embed_command(
     interaction: discord.Interaction,
@@ -5124,7 +5160,7 @@ async def embed_command(
 
         if not (title or description or image_url or thumbnail_url or image or thumbnail):
             return await interaction.response.send_message(
-                "❌ Please fill at least one field (title/description/image/thumbnail).",
+                "❌ Fill at least one field | املأ حقلًا واحدًا على الأقل (title/description/image/thumbnail).",
                 ephemeral=True,
             )
 
