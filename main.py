@@ -1197,6 +1197,11 @@ async def giveaway_panel(interaction: discord.Interaction):
 async def on_ready():
     """Bot is ready"""
     try:
+        # Register persistent views once so old panels keep working after restarts.
+        if not getattr(bot, "_persistent_views_added", False):
+            bot.add_view(ModSettingsView())
+            bot._persistent_views_added = True
+
         await bot.tree.sync()
         activity = discord.Activity(type=discord.ActivityType.playing, name="By Dep-A7")
         await bot.change_presence(activity=activity)
@@ -4287,52 +4292,52 @@ class ModSettingsView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
     
-    @discord.ui.button(label="Ban", emoji="🔨", style=discord.ButtonStyle.danger, row=0)
+    @discord.ui.button(label="Ban", emoji="🔨", style=discord.ButtonStyle.danger, row=0, custom_id="modsetup:ban")
     async def ban_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = BanSettingsModal()
         await interaction.response.send_modal(modal)
     
-    @discord.ui.button(label="Kick", emoji="👢", style=discord.ButtonStyle.danger, row=0)
+    @discord.ui.button(label="Kick", emoji="👢", style=discord.ButtonStyle.danger, row=0, custom_id="modsetup:kick")
     async def kick_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = KickSettingsModal()
         await interaction.response.send_modal(modal)
     
-    @discord.ui.button(label="Warn", emoji="⚠️", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Warn", emoji="⚠️", style=discord.ButtonStyle.primary, row=0, custom_id="modsetup:warn")
     async def warn_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = WarnSettingsModal()
         await interaction.response.send_modal(modal)
     
-    @discord.ui.button(label="Timeout", emoji="⏱️", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Timeout", emoji="⏱️", style=discord.ButtonStyle.primary, row=0, custom_id="modsetup:timeout")
     async def timeout_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = TimeoutSettingsModal()
         await interaction.response.send_modal(modal)
     
-    @discord.ui.button(label="Log Channel", emoji="📝", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Log Channel", emoji="📝", style=discord.ButtonStyle.secondary, row=1, custom_id="modsetup:log")
     async def log_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = ModLogModal()
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Clear", emoji="🧹", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Clear", emoji="🧹", style=discord.ButtonStyle.secondary, row=1, custom_id="modsetup:clear")
     async def clear_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = ClearSettingsModal()
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Lock/Unlock", emoji="🔒", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Lock/Unlock", emoji="🔒", style=discord.ButtonStyle.secondary, row=1, custom_id="modsetup:lock_unlock")
     async def lock_unlock_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = ChannelLockUnlockSettingsModal()
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Access Role", emoji="🛡️", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Access Role", emoji="🛡️", style=discord.ButtonStyle.secondary, row=1, custom_id="modsetup:access_role")
     async def access_role_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = ModAccessRoleModal()
         await interaction.response.send_modal(modal)
 
 class BanSettingsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="🔨 Ban Settings")
+        super().__init__(title="🔨 Ban | حظر")
         
         self.dm_msg = discord.ui.TextInput(
-            label="DM Message (use {server}, {reason})",
+            label="DM Msg | رسالة",
             placeholder="You have been banned from {server}. Reason: {reason}",
             style=discord.TextStyle.paragraph,
             required=False
@@ -4340,7 +4345,7 @@ class BanSettingsModal(discord.ui.Modal):
         self.add_item(self.dm_msg)
         
         self.shortcut = discord.ui.TextInput(
-            label="Shortcut (optional, e.g., 'b', 'ban')",
+            label="Shortcut | اختصار",
             placeholder="b",
             style=discord.TextStyle.short,
             required=False,
@@ -4377,10 +4382,10 @@ class BanSettingsModal(discord.ui.Modal):
 
 class KickSettingsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="👢 Kick Settings")
+        super().__init__(title="👢 Kick | طرد")
         
         self.dm_msg = discord.ui.TextInput(
-            label="DM Message (use {server}, {reason})",
+            label="DM Msg | رسالة",
             placeholder="You have been kicked from {server}. Reason: {reason}",
             style=discord.TextStyle.paragraph,
             required=False
@@ -4388,7 +4393,7 @@ class KickSettingsModal(discord.ui.Modal):
         self.add_item(self.dm_msg)
         
         self.shortcut = discord.ui.TextInput(
-            label="Shortcut (optional, e.g., 'k', 'kick')",
+            label="Shortcut | اختصار",
             placeholder="k",
             style=discord.TextStyle.short,
             required=False,
@@ -4425,10 +4430,10 @@ class KickSettingsModal(discord.ui.Modal):
 
 class WarnSettingsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="⚠️ Warn Settings")
+        super().__init__(title="⚠️ Warn | تحذير")
         
         self.dm_msg = discord.ui.TextInput(
-            label="DM Message (use {server}, {reason})",
+            label="DM Msg | رسالة",
             placeholder="You have been warned in {server}. Reason: {reason}",
             style=discord.TextStyle.paragraph,
             required=False
@@ -4436,7 +4441,7 @@ class WarnSettingsModal(discord.ui.Modal):
         self.add_item(self.dm_msg)
         
         self.shortcut = discord.ui.TextInput(
-            label="Shortcut (optional, e.g., 'w', 'warn')",
+            label="Shortcut | اختصار",
             placeholder="w",
             style=discord.TextStyle.short,
             required=False,
@@ -4473,10 +4478,10 @@ class WarnSettingsModal(discord.ui.Modal):
 
 class TimeoutSettingsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="⏱️ Timeout Settings")
+        super().__init__(title="⏱️ Timeout | تايم اوت")
         
         self.dm_msg = discord.ui.TextInput(
-            label="DM Message (use {server}, {reason}, {duration})",
+            label="DM Msg | رسالة",
             placeholder="You have been timed out. Duration: {duration}. Reason: {reason}",
             style=discord.TextStyle.paragraph,
             required=False
@@ -4484,7 +4489,7 @@ class TimeoutSettingsModal(discord.ui.Modal):
         self.add_item(self.dm_msg)
         
         self.shortcut = discord.ui.TextInput(
-            label="Shortcut (optional, e.g., 't', 'mute')",
+            label="Shortcut | اختصار",
             placeholder="t",
             style=discord.TextStyle.short,
             required=False,
