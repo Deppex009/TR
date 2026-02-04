@@ -182,6 +182,125 @@ def update_guild_config(guild_id, updates):
     full_config["servers"][guild_id_str].update(updates)
     save_config(full_config)
 
+
+def get_ticket_config(guild_id: int):
+    """Get ticket config for a guild and ensure required defaults exist."""
+    guild_cfg = get_guild_config(guild_id)
+
+    changed = False
+    if "tickets" not in guild_cfg or not isinstance(guild_cfg.get("tickets"), dict):
+        guild_cfg["tickets"] = {}
+        changed = True
+
+    tcfg = guild_cfg["tickets"]
+
+    def _set_default(key, value):
+        nonlocal changed
+        if key not in tcfg:
+            tcfg[key] = value
+            changed = True
+
+    _set_default("category_id", None)
+    _set_default("log_channel_id", None)
+    _set_default("admin_role_id", None)
+    _set_default("embed_color", "#9B59B6")
+    _set_default("panel_title", "🎫 Tickets | التكيت")
+    _set_default("panel_description", "اختر نوع التكيت من القائمة أدناه | Choose a ticket type below")
+    _set_default("dropdown_placeholder", "إضغط لفتح التكيت")
+    _set_default("menu_placeholder", "تعديل التكيت")
+    _set_default("panel_image", "")
+    _set_default("panel_author_icon", "")
+    _set_default("panel_author_name", "Ticket System")
+    _set_default("ticket_counter", 0)
+    _set_default("support_roles", [])
+    _set_default("ping_roles", [])
+
+    if "ticket_options" not in tcfg or not isinstance(tcfg.get("ticket_options"), list) or not tcfg.get("ticket_options"):
+        tcfg["ticket_options"] = [
+            {"label": "Support | دعم", "description": "الدعم الفني والمساعدة", "emoji": "🎫"},
+            {"label": "Report | بلاغ", "description": "الإبلاغ عن مشكلة أو عضو", "emoji": "🚨"},
+        ]
+        changed = True
+
+    if "buttons" not in tcfg or not isinstance(tcfg.get("buttons"), dict):
+        tcfg["buttons"] = {}
+        changed = True
+    if "messages" not in tcfg or not isinstance(tcfg.get("messages"), dict):
+        tcfg["messages"] = {}
+        changed = True
+    if "menu_options" not in tcfg or not isinstance(tcfg.get("menu_options"), dict):
+        tcfg["menu_options"] = {}
+        changed = True
+
+    # Buttons defaults
+    btn = tcfg["buttons"]
+    btn_defaults = {
+        "close": "CLOSE",
+        "close_emoji": "🔒",
+        "close_style": "danger",
+        "claim": "CLAIM",
+        "claim_emoji": "👥",
+        "claim_style": "primary",
+        "ping_admin": "استدعاء الإدارة",
+        "ping_admin_emoji": "📢",
+        "ping_admin_style": "secondary",
+        "mention_member": "منشن العضو",
+        "mention_member_emoji": "👤",
+        "mention_member_style": "secondary",
+    }
+    for k, v in btn_defaults.items():
+        if k not in btn:
+            btn[k] = v
+            changed = True
+
+    # Messages defaults
+    msg = tcfg["messages"]
+    msg_defaults = {
+        "modal_title": "فتح تذكرة",
+        "reason_label": "السبب",
+        "modal_placeholder": "اذكر سبب فتح للتذكره :",
+        "ticket_created_desc": "✅ تم فتح التكيت بنجاح",
+        "ticket_created_success": "✅ تم فتح التكيت",
+        "ticket_by_label": "بواسطة",
+        "by_emoji": "👤",
+        "reason_field_name": "السبب:",
+        "footer_text": "",
+        "ping_admin_message": "تم استدعاء الإدارة @ADMIN",
+        "mention_member_message": "@MEMBER تفضل",
+        "claim_message": "@USER استدعى الإدارة",
+        "claim_emoji": "👥",
+        "log_ticket_opened": "📬 Ticket Opened",
+        "log_opened_by": "Opened By",
+        "log_channel": "Channel",
+        "log_reason": "Reason",
+        "log_ticket_closed": "🔒 Ticket Closed",
+        "log_closed_by": "Closed By",
+        "log_ticket_claimed": "👥 Ticket Claimed",
+        "log_claimed_by": "Claimed By",
+    }
+    for k, v in msg_defaults.items():
+        if k not in msg:
+            msg[k] = v
+            changed = True
+
+    # Menu option defaults
+    menu = tcfg["menu_options"]
+    menu_defaults = {
+        "rename": {"label": "Rename", "emoji": "✏️", "description": "تغيير اسم التكيت"},
+        "add_user": {"label": "Add User", "emoji": "👤", "description": "اضافة عضو للتكيت"},
+        "remove_user": {"label": "Remove User", "emoji": "🚫", "description": "إزالة عضو من التكيت"},
+        "reset": {"label": "Reset Menu", "emoji": "🔄", "description": "إعادة تعيين القائمة"},
+    }
+    for k, v in menu_defaults.items():
+        if k not in menu:
+            menu[k] = v
+            changed = True
+
+    if changed:
+        update_guild_config(guild_id, guild_cfg)
+
+    return tcfg
+
 config = load_config()
 
 # Helper function to convert color name to hex
@@ -254,6 +373,386 @@ def parse_color(color_input):
     
     # Default fallback color
     return discord.Color(0x9B59B6)
+
+
+def _parse_bool_text(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    v = str(value).strip().lower()
+    if v in ("1", "true", "yes", "y", "on", "enable", "enabled"):
+        return True
+    if v in ("0", "false", "no", "n", "off", "disable", "disabled"):
+        return False
+    return default
+
+
+def get_auto_replies_config(guild_id: int) -> list[dict]:
+    guild_cfg = get_guild_config(guild_id)
+    changed = False
+    if "auto_replies" not in guild_cfg or not isinstance(guild_cfg.get("auto_replies"), list):
+        guild_cfg["auto_replies"] = []
+        changed = True
+    if changed:
+        update_guild_config(guild_id, guild_cfg)
+    return guild_cfg["auto_replies"]
+
+
+def get_channel_auto_config(guild_id: int) -> list[dict]:
+    guild_cfg = get_guild_config(guild_id)
+    changed = False
+    if "channel_auto" not in guild_cfg or not isinstance(guild_cfg.get("channel_auto"), list):
+        guild_cfg["channel_auto"] = []
+        changed = True
+    if changed:
+        update_guild_config(guild_id, guild_cfg)
+    return guild_cfg["channel_auto"]
+
+
+def _matches_trigger(message_content: str, trigger: str, *, match_type: str, case_sensitive: bool) -> bool:
+    if not case_sensitive:
+        message_content = message_content.lower()
+        trigger = trigger.lower()
+
+    match_type = (match_type or "contains").strip().lower()
+    if match_type == "exact":
+        return message_content == trigger
+    if match_type == "startswith":
+        return message_content.startswith(trigger)
+    if match_type == "endswith":
+        return message_content.endswith(trigger)
+    # default: contains
+    return trigger in message_content
+
+
+def _build_autoreply_panel_embed(guild: discord.Guild, items: list[dict]) -> discord.Embed:
+    embed = discord.Embed(
+        title="💬 Auto Replies Panel | لوحة الردود التلقائية",
+        description="Add / remove / toggle auto replies for words or sentences.",
+        color=discord.Color.blurple(),
+    )
+    if not items:
+        embed.add_field(name="No auto replies", value="Use **Add** to create one.", inline=False)
+        return embed
+
+    lines = []
+    for i, r in enumerate(items[:25], start=1):
+        enabled = "✅" if r.get("enabled", True) else "❌"
+        match_type = r.get("match", "contains")
+        mention = "@" if r.get("mention", False) else "-"
+        trig = str(r.get("trigger", ""))
+        rep = str(r.get("reply", ""))
+        if len(rep) > 60:
+            rep = rep[:57] + "..."
+        lines.append(f"`{i}` {enabled} [{match_type}/{mention}] **{trig}** → {rep}")
+    embed.add_field(name="Rules", value="\n".join(lines), inline=False)
+    embed.set_footer(text=f"Server: {guild.name}")
+    return embed
+
+
+class AutoReplyAddModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Add Auto Reply")
+        self.guild_id = int(guild_id)
+
+        self.trigger = discord.ui.TextInput(
+            label="Trigger (word/sentence)",
+            placeholder="hi",
+            required=True,
+            max_length=200,
+        )
+        self.add_item(self.trigger)
+
+        self.reply = discord.ui.TextInput(
+            label="Reply text",
+            placeholder="welcome!",
+            style=discord.TextStyle.paragraph,
+            required=True,
+            max_length=1500,
+        )
+        self.add_item(self.reply)
+
+        self.match = discord.ui.TextInput(
+            label="Match type: contains/exact/startswith/endswith",
+            placeholder="contains",
+            required=False,
+            max_length=20,
+        )
+        self.add_item(self.match)
+
+        self.mention = discord.ui.TextInput(
+            label="Mention user? yes/no",
+            placeholder="no",
+            required=False,
+            max_length=10,
+        )
+        self.add_item(self.mention)
+
+        self.case_sensitive = discord.ui.TextInput(
+            label="Case sensitive? yes/no",
+            placeholder="no",
+            required=False,
+            max_length=10,
+        )
+        self.add_item(self.case_sensitive)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        items = get_auto_replies_config(interaction.guild_id)
+        items.append(
+            {
+                "trigger": self.trigger.value.strip(),
+                "reply": self.reply.value.strip(),
+                "match": (self.match.value or "contains").strip().lower(),
+                "mention": _parse_bool_text(self.mention.value, False),
+                "case_sensitive": _parse_bool_text(self.case_sensitive.value, False),
+                "enabled": True,
+            }
+        )
+        update_guild_config(interaction.guild_id, {"auto_replies": items})
+        await interaction.response.send_message("✅ Auto reply added.", ephemeral=True)
+
+
+class AutoReplyIndexModal(discord.ui.Modal):
+    def __init__(self, guild_id: int, mode: str):
+        super().__init__(title=f"Auto Reply: {mode.title()}")
+        self.guild_id = int(guild_id)
+        self.mode = mode
+
+        self.index = discord.ui.TextInput(
+            label="Rule number (from panel)",
+            placeholder="1",
+            required=True,
+            max_length=5,
+        )
+        self.add_item(self.index)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        items = get_auto_replies_config(interaction.guild_id)
+        try:
+            idx = int(self.index.value)
+        except Exception:
+            return await interaction.response.send_message("❌ Invalid number.", ephemeral=True)
+
+        if idx < 1 or idx > len(items):
+            return await interaction.response.send_message("❌ Out of range.", ephemeral=True)
+
+        i = idx - 1
+        if self.mode == "remove":
+            removed = items.pop(i)
+            update_guild_config(interaction.guild_id, {"auto_replies": items})
+            return await interaction.response.send_message(f"✅ Removed: {removed.get('trigger')}", ephemeral=True)
+
+        if self.mode == "toggle":
+            items[i]["enabled"] = not items[i].get("enabled", True)
+            update_guild_config(interaction.guild_id, {"auto_replies": items})
+            state = "enabled" if items[i]["enabled"] else "disabled"
+            return await interaction.response.send_message(f"✅ Toggled rule {idx} ({state}).", ephemeral=True)
+
+        await interaction.response.send_message("❌ Unknown action.", ephemeral=True)
+
+
+class AutoReplyPanelView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=300)
+        self.guild_id = int(guild_id)
+
+    async def _refresh(self, interaction: discord.Interaction):
+        items = get_auto_replies_config(interaction.guild_id)
+        embed = _build_autoreply_panel_embed(interaction.guild, items)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Add", style=discord.ButtonStyle.success, row=0)
+    async def add_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+        await interaction.response.send_modal(AutoReplyAddModal(self.guild_id))
+
+    @discord.ui.button(label="Remove", style=discord.ButtonStyle.danger, row=0)
+    async def remove_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+        await interaction.response.send_modal(AutoReplyIndexModal(self.guild_id, "remove"))
+
+    @discord.ui.button(label="Toggle", style=discord.ButtonStyle.primary, row=0)
+    async def toggle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+        await interaction.response.send_modal(AutoReplyIndexModal(self.guild_id, "toggle"))
+
+    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, row=0)
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._refresh(interaction)
+
+
+def _build_channel_auto_panel_embed(guild: discord.Guild, items: list[dict]) -> discord.Embed:
+    embed = discord.Embed(
+        title="📌 Channel Auto Panel | لوحة الردود في القنوات",
+        description="When someone sends a message in a configured channel, the bot replies and can react.",
+        color=discord.Color.green(),
+    )
+    if not items:
+        embed.add_field(name="No channel rules", value="Use **Add** to create one.", inline=False)
+        return embed
+
+    lines = []
+    for i, r in enumerate(items[:25], start=1):
+        enabled = "✅" if r.get("enabled", True) else "❌"
+        channel_id = r.get("channel_id")
+        mention = "@" if r.get("mention", False) else "-"
+        reactions = " ".join(r.get("reactions", []) or [])
+        rep = str(r.get("reply", ""))
+        if len(rep) > 60:
+            rep = rep[:57] + "..."
+        ch_text = f"<#{channel_id}>" if channel_id else "(no channel)"
+        lines.append(f"`{i}` {enabled} [{mention}] {ch_text} → {rep} | {reactions}")
+    embed.add_field(name="Rules", value="\n".join(lines), inline=False)
+    embed.set_footer(text=f"Server: {guild.name}")
+    return embed
+
+
+class ChannelAutoAddModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Add Channel Auto Rule")
+        self.guild_id = int(guild_id)
+
+        self.channel = discord.ui.TextInput(
+            label="Channel mention or ID",
+            placeholder="#general or 1234567890",
+            required=True,
+            max_length=60,
+        )
+        self.add_item(self.channel)
+
+        self.reply = discord.ui.TextInput(
+            label="Reply text",
+            placeholder="Thanks for your message!",
+            style=discord.TextStyle.paragraph,
+            required=True,
+            max_length=1500,
+        )
+        self.add_item(self.reply)
+
+        self.reactions = discord.ui.TextInput(
+            label="Reactions (space-separated, optional)",
+            placeholder="✅ 🔥",
+            required=False,
+            max_length=200,
+        )
+        self.add_item(self.reactions)
+
+        self.mention = discord.ui.TextInput(
+            label="Mention user in reply? yes/no",
+            placeholder="no",
+            required=False,
+            max_length=10,
+        )
+        self.add_item(self.mention)
+
+        self.enabled = discord.ui.TextInput(
+            label="Enabled? yes/no",
+            placeholder="yes",
+            required=False,
+            max_length=10,
+        )
+        self.add_item(self.enabled)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message("❌ Server only", ephemeral=True)
+
+        raw = self.channel.value.strip()
+        m = re.search(r"(\d{5,})", raw)
+        if not m:
+            return await interaction.response.send_message("❌ Invalid channel.", ephemeral=True)
+        channel_id = int(m.group(1))
+        channel_obj = interaction.guild.get_channel(channel_id)
+        if not channel_obj:
+            return await interaction.response.send_message("❌ Channel not found in this server.", ephemeral=True)
+
+        items = get_channel_auto_config(interaction.guild_id)
+        reactions = [e.strip() for e in (self.reactions.value or "").split() if e.strip()]
+        items.append(
+            {
+                "channel_id": channel_id,
+                "reply": self.reply.value.strip(),
+                "mention": _parse_bool_text(self.mention.value, False),
+                "reactions": reactions,
+                "enabled": _parse_bool_text(self.enabled.value, True),
+            }
+        )
+        update_guild_config(interaction.guild_id, {"channel_auto": items})
+        await interaction.response.send_message("✅ Channel auto rule added.", ephemeral=True)
+
+
+class ChannelAutoIndexModal(discord.ui.Modal):
+    def __init__(self, guild_id: int, mode: str):
+        super().__init__(title=f"Channel Auto: {mode.title()}")
+        self.guild_id = int(guild_id)
+        self.mode = mode
+
+        self.index = discord.ui.TextInput(
+            label="Rule number (from panel)",
+            placeholder="1",
+            required=True,
+            max_length=5,
+        )
+        self.add_item(self.index)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        items = get_channel_auto_config(interaction.guild_id)
+        try:
+            idx = int(self.index.value)
+        except Exception:
+            return await interaction.response.send_message("❌ Invalid number.", ephemeral=True)
+
+        if idx < 1 or idx > len(items):
+            return await interaction.response.send_message("❌ Out of range.", ephemeral=True)
+
+        i = idx - 1
+        if self.mode == "remove":
+            removed = items.pop(i)
+            update_guild_config(interaction.guild_id, {"channel_auto": items})
+            return await interaction.response.send_message(f"✅ Removed rule for <#{removed.get('channel_id')}>.", ephemeral=True)
+
+        if self.mode == "toggle":
+            items[i]["enabled"] = not items[i].get("enabled", True)
+            update_guild_config(interaction.guild_id, {"channel_auto": items})
+            state = "enabled" if items[i]["enabled"] else "disabled"
+            return await interaction.response.send_message(f"✅ Toggled rule {idx} ({state}).", ephemeral=True)
+
+        await interaction.response.send_message("❌ Unknown action.", ephemeral=True)
+
+
+class ChannelAutoPanelView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=300)
+        self.guild_id = int(guild_id)
+
+    async def _refresh(self, interaction: discord.Interaction):
+        items = get_channel_auto_config(interaction.guild_id)
+        embed = _build_channel_auto_panel_embed(interaction.guild, items)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Add", style=discord.ButtonStyle.success, row=0)
+    async def add_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+        await interaction.response.send_modal(ChannelAutoAddModal(self.guild_id))
+
+    @discord.ui.button(label="Remove", style=discord.ButtonStyle.danger, row=0)
+    async def remove_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+        await interaction.response.send_modal(ChannelAutoIndexModal(self.guild_id, "remove"))
+
+    @discord.ui.button(label="Toggle", style=discord.ButtonStyle.primary, row=0)
+    async def toggle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+        await interaction.response.send_modal(ChannelAutoIndexModal(self.guild_id, "toggle"))
+
+    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, row=0)
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._refresh(interaction)
 
 # Giveaway helpers
 GIVEAWAY_DURATION_REGEX = re.compile(r"^(\d+)(s|m|h|d|w)$", re.IGNORECASE)
@@ -541,18 +1040,18 @@ async def set_color(interaction: discord.Interaction, color: str):
 async def image(interaction: discord.Interaction, enabled: bool, url: str = None):
     """Manage image settings - enable/disable and set URL"""
     try:
-        config["show_image"] = enabled
-        
+        updates = {"show_image": enabled}
         if url:
-            config["image_url"] = url
-        
-        save_config(config)
+            updates["image_url"] = url
+        update_guild_config(interaction.guild_id, updates)
+
+        guild_cfg = get_guild_config(interaction.guild_id)
         
         status = "✅ Enabled | مُفعَّلة" if enabled else "❌ Disabled | معطَّلة"
         embed = discord.Embed(
             title="🖼️ Image Settings | إعدادات الصور",
             description=f"Status: {status}\n\nالحالة: {status}",
-            color=parse_color(config["embed_color"])
+            color=parse_color(guild_cfg.get("embed_color", "#9B59B6"))
         )
         
         if url:
@@ -569,11 +1068,12 @@ async def image(interaction: discord.Interaction, enabled: bool, url: str = None
 @bot.tree.command(name="colors", description="See available colors | شاهد الألوان المتاحة")
 async def colors(interaction: discord.Interaction):
     """Show available colors"""
+    guild_cfg = get_guild_config(interaction.guild_id)
     color_list = ", ".join(COLOR_NAMES.keys())
     embed = discord.Embed(
         title="🎨 Available Colors | الألوان المتاحة",
         description=f"**Colors:** {color_list}\n\n**Hex Codes:** Use #FF0000 or 0xFF0000 format\n\n**الألوان:** {color_list}\n\n**أكواد سادس عشر:** استخدم صيغة #FF0000 أو 0xFF0000",
-        color=parse_color(config["embed_color"])
+        color=parse_color(guild_cfg.get("embed_color", "#9B59B6"))
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -583,17 +1083,17 @@ async def upload_image(interaction: discord.Interaction, image: discord.Attachme
     """Upload image via attachment"""
     try:
         # Check if it's an image
-        if not image.content_type.startswith('image'):
+        if not (image.content_type or "").startswith('image'):
             await interaction.response.send_message("❌ Please upload an image file | الرجاء رفع ملف صورة", ephemeral=True)
             return
-        
-        config["image_url"] = image.url
-        save_config(config)
+
+        update_guild_config(interaction.guild_id, {"image_url": image.url})
+        guild_cfg = get_guild_config(interaction.guild_id)
         
         embed = discord.Embed(
             title="✅ Image Uploaded | تم رفع الصورة",
             description="Your image is now set as the poem decoration\n\nتم تعيين صورتك كزينة الأشعار",
-            color=parse_color(config["embed_color"])
+            color=parse_color(guild_cfg.get("embed_color", "#9B59B6"))
         )
         embed.set_image(url=image.url)
         
@@ -611,37 +1111,37 @@ async def upload_image(interaction: discord.Interaction, image: discord.Attachme
 async def auto_react(interaction: discord.Interaction, enabled: bool, emojis: str = None):
     """Setup auto reactions on poem embeds"""
     try:
-        config["auto_react"] = enabled
-        
+        updates = {"auto_react": enabled}
         if emojis:
-            # Split emojis and clean them up
             emoji_list = [e.strip() for e in emojis.split() if e.strip()]
-            config["react_emojis"] = emoji_list
-        
-        save_config(config)
+            updates["react_emojis"] = emoji_list
+        update_guild_config(interaction.guild_id, updates)
+
+        guild_cfg = get_guild_config(interaction.guild_id)
+        current_reacts = guild_cfg.get("react_emojis", ["❤️", "🔥"])
         
         status = "✅ Enabled | مُفعَّلة" if enabled else "❌ Disabled | معطَّلة"
         embed = discord.Embed(
             title="😊 Auto React Settings | إعدادات التفاعلات التلقائية",
             description=f"Status: {status}\n\nالحالة: {status}\n\n✨ **You can use MULTIPLE emojis!**\nJust separate them with spaces: ❤️ 🔥 😍 💜 👏\n\n**Works with:** Unicode emojis, Custom emojis, emoji IDs",
-            color=parse_color(config["embed_color"])
+            color=parse_color(guild_cfg.get("embed_color", "#9B59B6"))
         )
         
         if emojis:
             embed.add_field(
                 name="Reactions | التفاعلات",
-                value=" ".join(config["react_emojis"]),
+                value=" ".join(current_reacts),
                 inline=False
             )
         else:
             embed.add_field(
                 name="Current Reactions | التفاعلات الحالية",
-                value=" ".join(config["react_emojis"]),
+                value=" ".join(current_reacts),
                 inline=False
             )
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
-        logger.info(f"Auto react settings updated - enabled: {enabled}, emojis: {config['react_emojis']}")
+        logger.info(f"Auto react settings updated - enabled: {enabled}, emojis: {current_reacts}")
     except Exception as e:
         logger.error(f"Auto react command error: {e}")
         await interaction.response.send_message("❌ Error updating reactions", ephemeral=True)
@@ -650,9 +1150,10 @@ async def auto_react(interaction: discord.Interaction, enabled: bool, emojis: st
 async def help_command(interaction: discord.Interaction):
     """Show all available commands"""
     try:
+        guild_cfg = get_guild_config(interaction.guild_id)
         embed = discord.Embed(
             title="📚 Available Commands | الأوامر المتاحة",
-            color=parse_color(config["embed_color"])
+            color=parse_color(guild_cfg.get("embed_color", "#9B59B6"))
         )
         
         embed.add_field(
@@ -695,11 +1196,12 @@ async def help_command(interaction: discord.Interaction):
 async def info(interaction: discord.Interaction):
     """Show current bot settings"""
     try:
-        channel = bot.get_channel(config["poem_channel"]) if config["poem_channel"] else None
+        guild_cfg = get_guild_config(interaction.guild_id)
+        channel = bot.get_channel(guild_cfg.get("poem_channel")) if guild_cfg.get("poem_channel") else None
         
         embed = discord.Embed(
             title="⚙️ Bot Settings | إعدادات البوت",
-            color=parse_color(config["embed_color"])
+            color=parse_color(guild_cfg.get("embed_color", "#9B59B6"))
         )
         
         embed.add_field(
@@ -709,27 +1211,27 @@ async def info(interaction: discord.Interaction):
         )
         embed.add_field(
             name="🎨 Embed Color | لون الإطار",
-            value=f"`{config['embed_color']}`",
+            value=f"`{guild_cfg.get('embed_color', '#9B59B6')}`",
             inline=True
         )
         embed.add_field(
             name="🖼️ Image Display | عرض الصور",
-            value=f"{'Enabled ✅ | مُفعَّلة' if config['show_image'] else 'Disabled ❌ | معطَّلة'}",
+            value=f"{'Enabled ✅ | مُفعَّلة' if guild_cfg.get('show_image', True) else 'Disabled ❌ | معطَّلة'}",
             inline=True
         )
         embed.add_field(
             name="🔗 Image URL | رابط الصورة",
-            value=f"{config['image_url']}",
+            value=f"{guild_cfg.get('image_url', '')}",
             inline=False
         )
         embed.add_field(
             name="😊 Auto React | التفاعلات التلقائية",
-            value=f"{'Enabled ✅ | مُفعَّلة' if config['auto_react'] else 'Disabled ❌ | معطَّلة'}",
+            value=f"{'Enabled ✅ | مُفعَّلة' if guild_cfg.get('auto_react', False) else 'Disabled ❌ | معطَّلة'}",
             inline=True
         )
         embed.add_field(
             name="Reactions | التفاعلات",
-            value=" ".join(config["react_emojis"]),
+            value=" ".join(guild_cfg.get("react_emojis", ["❤️", "🔥"])),
             inline=True
         )
         
@@ -825,67 +1327,6 @@ class PoemAppearanceModal(discord.ui.Modal):
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
-@bot.event
-async def on_message(message):
-    """Process messages in poem channel"""
-    if message.author.bot:
-        return
-    
-    # Check if message is in the poem channel
-    if config["poem_channel"] and message.channel.id == config["poem_channel"]:
-        try:
-            # Create embed with custom layout
-            embed = discord.Embed(
-                title="𝐓𝐑 • 𝐏𝐨𝐞𝐦𝐬",
-                description=f"\n\n**{message.content}**\n\n",
-                color=parse_color(config["embed_color"])
-            )
-            
-            # Set USER's profile picture on the RIGHT as thumbnail
-            if message.author.avatar:
-                embed.set_thumbnail(url=message.author.avatar.url)
-            
-            # Set footer with bot icon and username
-            embed.set_footer(
-                text=f"{message.author.display_name}",
-                icon_url=bot.user.avatar.url if bot.user.avatar else None
-            )
-            
-            # Send embed
-            embed_message = await message.channel.send(embed=embed)
-            
-            # Add auto reactions if enabled
-            if config["auto_react"] and config["react_emojis"]:
-                for emoji in config["react_emojis"]:
-                    try:
-                        # Try to add the emoji - works with unicode, custom emojis, etc
-                        await embed_message.add_reaction(emoji.strip())
-                    except Exception as e:
-                        logger.warning(f"Could not add reaction {emoji}: {e}")
-                        # Try to find if it's a custom emoji ID
-                        try:
-                            if emoji.isdigit():
-                                # It's just an emoji ID, try to get the emoji
-                                emoji_obj = await bot.fetch_emoji(int(emoji))
-                                await embed_message.add_reaction(emoji_obj)
-                        except:
-                            pass
-            
-            # Send decorative image AFTER the embed if enabled and URL is set - NOT as embed
-            if config["show_image"] and config["image_url"]:
-                try:
-                    await message.channel.send(config["image_url"])
-                except Exception as e:
-                    logger.warning(f"Could not send image: {e}")
-            
-            # Delete original message
-            await message.delete()
-            logger.info(f"Poem processed from {message.author}")
-        except Exception as e:
-            logger.error(f"Error processing message: {e}")
-    
-    await bot.process_commands(message)
-
 # Error handling
 @bot.event
 async def on_error(event, *args, **kwargs):
@@ -896,18 +1337,21 @@ async def on_error(event, *args, **kwargs):
 
 class TicketDropdown(discord.ui.Select):
     """Dropdown for ticket options"""
-    def __init__(self):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        tcfg = get_ticket_config(self.guild_id)
         options = []
-        for option in config["tickets"]["ticket_options"]:
+        for option in tcfg.get("ticket_options", []):
             options.append(
                 discord.SelectOption(
                     label=option["label"],
                     emoji=option.get("emoji", "🎫"),
-                    description=option["description"]
+                    description=option.get("description", ""),
+                    value=option["label"],
                 )
             )
         super().__init__(
-            placeholder=config["tickets"].get("dropdown_placeholder", "إضغط لفتح التكيت"), 
+            placeholder=tcfg.get("dropdown_placeholder", "إضغط لفتح التكيت"),
             min_values=1, 
             max_values=1, 
             options=options,
@@ -917,24 +1361,26 @@ class TicketDropdown(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         """Handle ticket creation"""
         # Show modal for reason
-        modal = TicketReasonModal(self.values[0])
+        modal = TicketReasonModal(self.guild_id, self.values[0])
         await interaction.response.send_modal(modal)
 
 class TicketDropdownView(discord.ui.View):
     """View with dropdown"""
-    def __init__(self):
+    def __init__(self, guild_id: int):
         super().__init__(timeout=None)
-        self.add_item(TicketDropdown())
+        self.add_item(TicketDropdown(guild_id))
 
 class TicketReasonModal(discord.ui.Modal):
     """Modal to ask for ticket reason"""
-    def __init__(self, ticket_type):
-        super().__init__(title=config["tickets"]["messages"].get("modal_title", "فتح تذكرة"))
+    def __init__(self, guild_id: int, ticket_type: str):
+        self.guild_id = int(guild_id)
+        tcfg = get_ticket_config(self.guild_id)
+        super().__init__(title=tcfg.get("messages", {}).get("modal_title", "فتح تذكرة"))
         self.ticket_type = ticket_type
         
         self.reason = discord.ui.TextInput(
-            label=config["tickets"]["messages"].get("reason_label", "السبب"),
-            placeholder=config["tickets"]["messages"].get("modal_placeholder", "اذكر سبب فتح للتذكره :"),
+            label=tcfg.get("messages", {}).get("reason_label", "السبب"),
+            placeholder=tcfg.get("messages", {}).get("modal_placeholder", "اذكر سبب فتح للتذكره :"),
             style=discord.TextStyle.paragraph,
             required=True,
             max_length=500
@@ -946,16 +1392,18 @@ class TicketReasonModal(discord.ui.Modal):
         try:
             # Defer response immediately to prevent timeout
             await interaction.response.defer(ephemeral=True)
+
+            tcfg = get_ticket_config(interaction.guild_id)
             
             # Increment ticket counter
-            config["tickets"]["ticket_counter"] += 1
-            ticket_num = config["tickets"]["ticket_counter"]
-            save_config(config)
+            tcfg["ticket_counter"] = int(tcfg.get("ticket_counter", 0)) + 1
+            ticket_num = tcfg["ticket_counter"]
+            update_guild_config(interaction.guild_id, {"tickets": tcfg})
             
             # Get category
             category = None
-            if config["tickets"]["category_id"]:
-                category = bot.get_channel(config["tickets"]["category_id"])
+            if tcfg.get("category_id"):
+                category = bot.get_channel(int(tcfg.get("category_id")))
             
             # Create ticket channel with username
             guild = interaction.guild
@@ -972,7 +1420,7 @@ class TicketReasonModal(discord.ui.Modal):
             }
             
             # Add support roles
-            for role_id in config["tickets"].get("support_roles", []):
+            for role_id in tcfg.get("support_roles", []):
                 role = guild.get_role(role_id)
                 if role:
                     overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
@@ -985,7 +1433,7 @@ class TicketReasonModal(discord.ui.Modal):
             
             # Create mention string for ping roles
             ping_mentions = ""
-            for role_id in config["tickets"].get("ping_roles", []):
+            for role_id in tcfg.get("ping_roles", []):
                 role = guild.get_role(role_id)
                 if role:
                     ping_mentions += f" {role.mention}"
@@ -993,35 +1441,35 @@ class TicketReasonModal(discord.ui.Modal):
             # Create ticket embed
             embed = discord.Embed(
                 title=self.ticket_type,
-                description=config["tickets"]["messages"]["ticket_created_desc"],
-                color=parse_color(config["tickets"]["embed_color"])
+                description=tcfg.get("messages", {}).get("ticket_created_desc", "✅ تم فتح التكيت بنجاح"),
+                color=parse_color(tcfg.get("embed_color", "#9B59B6"))
             )
             
             # Add ticket image
-            if config["tickets"].get("panel_image") and config["tickets"]["panel_image"] != "YOUR IMAGE URL HERE":
-                embed.set_image(url=config["tickets"]["panel_image"])
+            if tcfg.get("panel_image") and str(tcfg.get("panel_image")).strip():
+                embed.set_image(url=str(tcfg.get("panel_image")).strip())
             
             # Add fields
-            by_label = config["tickets"]["messages"].get("ticket_by_label", "بواسطة")
-            by_emoji = config["tickets"]["messages"].get("by_emoji", "👤")
+            by_label = tcfg.get("messages", {}).get("ticket_by_label", "بواسطة")
+            by_emoji = tcfg.get("messages", {}).get("by_emoji", "👤")
             embed.add_field(name=f"{by_emoji} {by_label}", value=interaction.user.mention, inline=False)
             
             # Use custom footer - only show time
-            footer_text = config["tickets"]["messages"].get("footer_text", "")
+            footer_text = tcfg.get("messages", {}).get("footer_text", "")
             if footer_text:
                 embed.set_footer(text=f"{footer_text} • {interaction.created_at.strftime('%I:%M %p')}")
             else:
                 embed.set_footer(text=interaction.created_at.strftime('%I:%M %p'))
             
             # Create reason embed
-            reason_field_name = config["tickets"]["messages"].get("reason_field_name", "REASON:")
+            reason_field_name = tcfg.get("messages", {}).get("reason_field_name", "REASON:")
             reason_embed = discord.Embed(
                 description=f"**{reason_field_name}**\n{self.reason.value}",
-                color=parse_color(config["tickets"]["embed_color"])
+                color=parse_color(tcfg.get("embed_color", "#9B59B6"))
             )
             
             # Send both embeds together with buttons (reason will appear between embed and buttons)
-            view = TicketControlView(ticket_channel.id, interaction.user.id)
+            view = TicketControlView(interaction.guild_id, ticket_channel.id, interaction.user.id)
             content = f"{interaction.user.mention}{ping_mentions}"
             await ticket_channel.send(content=content, embeds=[embed, reason_embed], view=view)
             
@@ -1029,7 +1477,7 @@ class TicketReasonModal(discord.ui.Modal):
             await self.log_ticket_creation(interaction, ticket_channel, ticket_num, self.reason.value)
             
             # Follow up with success message
-            success_msg = config["tickets"]["messages"].get("ticket_created_success", "✅ تم فتح التكيت")
+            success_msg = tcfg.get("messages", {}).get("ticket_created_success", "✅ تم فتح التكيت")
             await interaction.followup.send(
                 f"{success_msg} {ticket_channel.mention}",
                 ephemeral=True
@@ -1047,7 +1495,8 @@ class TicketReasonModal(discord.ui.Modal):
     async def log_ticket_creation(self, interaction, ticket_channel, ticket_num, reason):
         """Log ticket creation to log channel"""
         try:
-            log_channel_id = config["tickets"].get("log_channel_id")
+            tcfg = get_ticket_config(interaction.guild_id)
+            log_channel_id = tcfg.get("log_channel_id")
             if not log_channel_id:
                 return
             
@@ -1055,11 +1504,11 @@ class TicketReasonModal(discord.ui.Modal):
             if not log_channel:
                 return
             
-            messages = config["tickets"]["messages"]
+            messages = tcfg.get("messages", {})
             
             embed = discord.Embed(
                 title=messages.get("log_ticket_opened", "📬 Ticket Opened"),
-                color=parse_color(config["tickets"]["embed_color"]),
+                color=parse_color(tcfg.get("embed_color", "#9B59B6")),
                 timestamp=discord.utils.utcnow()
             )
             
@@ -1075,10 +1524,13 @@ class TicketReasonModal(discord.ui.Modal):
 
 class TicketControlView(discord.ui.View):
     """Buttons for ticket control"""
-    def __init__(self, channel_id, owner_id):
+    def __init__(self, guild_id: int, channel_id, owner_id):
         super().__init__(timeout=None)
+        self.guild_id = int(guild_id)
         self.channel_id = channel_id
         self.owner_id = owner_id
+
+        tcfg = get_ticket_config(self.guild_id)
         
         # Convert string to ButtonStyle helper
         style_map = {
@@ -1094,10 +1546,10 @@ class TicketControlView(discord.ui.View):
         }
         
         # Close button (ADMIN ONLY)
-        close_style = style_map.get(config["tickets"]["buttons"].get("close_style", "danger").lower(), discord.ButtonStyle.danger)
+        close_style = style_map.get(tcfg.get("buttons", {}).get("close_style", "danger").lower(), discord.ButtonStyle.danger)
         close_btn = discord.ui.Button(
-            label=config["tickets"]["buttons"]["close"],
-            emoji=config["tickets"]["buttons"]["close_emoji"],
+            label=tcfg.get("buttons", {}).get("close", "CLOSE"),
+            emoji=tcfg.get("buttons", {}).get("close_emoji", "🔒"),
             style=close_style,
             custom_id=f"ticket_close_{channel_id}"
         )
@@ -1105,10 +1557,10 @@ class TicketControlView(discord.ui.View):
         self.add_item(close_btn)
         
         # Claim button (ADMIN ONLY)
-        claim_style = style_map.get(config["tickets"]["buttons"].get("claim_style", "primary").lower(), discord.ButtonStyle.primary)
+        claim_style = style_map.get(tcfg.get("buttons", {}).get("claim_style", "primary").lower(), discord.ButtonStyle.primary)
         claim_btn = discord.ui.Button(
-            label=config["tickets"]["buttons"]["claim"],
-            emoji=config["tickets"]["buttons"]["claim_emoji"],
+            label=tcfg.get("buttons", {}).get("claim", "CLAIM"),
+            emoji=tcfg.get("buttons", {}).get("claim_emoji", "👥"),
             style=claim_style,
             custom_id=f"ticket_claim_{channel_id}"
         )
@@ -1116,10 +1568,10 @@ class TicketControlView(discord.ui.View):
         self.add_item(claim_btn)
         
         # Ping Admin button (MEMBER CAN USE)
-        ping_admin_style = style_map.get(config["tickets"]["buttons"].get("ping_admin_style", "secondary").lower(), discord.ButtonStyle.secondary)
+        ping_admin_style = style_map.get(tcfg.get("buttons", {}).get("ping_admin_style", "secondary").lower(), discord.ButtonStyle.secondary)
         ping_admin_btn = discord.ui.Button(
-            label=config["tickets"]["buttons"].get("ping_admin", "استدعاء الإدارة"),
-            emoji=config["tickets"]["buttons"].get("ping_admin_emoji", "📢"),
+            label=tcfg.get("buttons", {}).get("ping_admin", "استدعاء الإدارة"),
+            emoji=tcfg.get("buttons", {}).get("ping_admin_emoji", "📢"),
             style=ping_admin_style,
             custom_id=f"ticket_ping_admin_{channel_id}"
         )
@@ -1127,10 +1579,10 @@ class TicketControlView(discord.ui.View):
         self.add_item(ping_admin_btn)
         
         # Mention Member button (ADMIN ONLY)
-        mention_member_style = style_map.get(config["tickets"]["buttons"].get("mention_member_style", "secondary").lower(), discord.ButtonStyle.secondary)
+        mention_member_style = style_map.get(tcfg.get("buttons", {}).get("mention_member_style", "secondary").lower(), discord.ButtonStyle.secondary)
         mention_member_btn = discord.ui.Button(
-            label=config["tickets"]["buttons"].get("mention_member", "منشن العضو"),
-            emoji=config["tickets"]["buttons"].get("mention_member_emoji", "👤"),
+            label=tcfg.get("buttons", {}).get("mention_member", "منشن العضو"),
+            emoji=tcfg.get("buttons", {}).get("mention_member_emoji", "👤"),
             style=mention_member_style,
             custom_id=f"ticket_mention_member_{channel_id}"
         )
@@ -1138,23 +1590,37 @@ class TicketControlView(discord.ui.View):
         self.add_item(mention_member_btn)
         
         # Add dropdown for menu options (ADMIN ONLY)
-        self.add_item(TicketMenuDropdown(channel_id, owner_id))
+        self.add_item(TicketMenuDropdown(self.guild_id, channel_id, owner_id))
     
     def has_permission(self, interaction: discord.Interaction) -> bool:
         """Check if user has admin permission (support roles only)"""
-        # Check if user has any of the support roles
+        tcfg = get_ticket_config(interaction.guild_id)
+        if interaction.user.guild_permissions.administrator:
+            return True
+
+        admin_role_id = tcfg.get("admin_role_id")
+        if admin_role_id:
+            try:
+                if any(r.id == int(admin_role_id) for r in interaction.user.roles):
+                    return True
+            except Exception:
+                pass
+
         user_role_ids = [role.id for role in interaction.user.roles]
-        support_role_ids = config["tickets"].get("support_roles", [])
-        
-        # User needs to have at least one support role
-        return any(role_id in support_role_ids for role_id in user_role_ids)
+        support_role_ids = tcfg.get("support_roles", [])
+        if support_role_ids:
+            return any(role_id in support_role_ids for role_id in user_role_ids)
+
+        # Fallback if no roles configured yet
+        return interaction.user.guild_permissions.manage_channels
     
     async def ping_admin(self, interaction: discord.Interaction):
         """Ping admin roles (anyone can use)"""
         try:
+            tcfg = get_ticket_config(interaction.guild_id)
             # Build ping mentions
             ping_mentions = ""
-            for role_id in config["tickets"].get("support_roles", []):
+            for role_id in tcfg.get("ping_roles", []) or tcfg.get("support_roles", []):
                 role = interaction.guild.get_role(role_id)
                 if role:
                     ping_mentions += f" {role.mention}"
@@ -1164,7 +1630,7 @@ class TicketControlView(discord.ui.View):
                 return
             
             # Get custom message
-            message = config["tickets"]["messages"].get("ping_admin_message", "تم استدعاء الإدارة @ADMIN")
+            message = tcfg.get("messages", {}).get("ping_admin_message", "تم استدعاء الإدارة @ADMIN")
             message = message.replace("@ADMIN", ping_mentions)
             
             await interaction.response.send_message(message)
@@ -1185,7 +1651,8 @@ class TicketControlView(discord.ui.View):
             owner = interaction.guild.get_member(self.owner_id)
             if owner:
                 # Get custom message
-                message = config["tickets"]["messages"].get("mention_member_message", "@MEMBER تفضل")
+                tcfg = get_ticket_config(interaction.guild_id)
+                message = tcfg.get("messages", {}).get("mention_member_message", "@MEMBER تفضل")
                 message = message.replace("@MEMBER", owner.mention)
                 await interaction.response.send_message(message)
             else:
@@ -1246,10 +1713,11 @@ class TicketControlView(discord.ui.View):
             await self.log_ticket_action(interaction, "claimed")
             
             # Send claim message
-            claim_msg = config["tickets"]["messages"].get("claim_message", "@USER استدعى الإدارة")
+            tcfg = get_ticket_config(interaction.guild_id)
+            claim_msg = tcfg.get("messages", {}).get("claim_message", "@USER استدعى الإدارة")
             claim_msg = claim_msg.replace("@USER", interaction.user.mention)
             
-            claim_emoji = config["tickets"]["messages"].get("claim_emoji", "👥")
+            claim_emoji = tcfg.get("messages", {}).get("claim_emoji", "👥")
             
             await interaction.response.send_message(f"{claim_emoji} {claim_msg}")
             logger.info(f"Ticket claimed by {interaction.user}")
@@ -1264,7 +1732,8 @@ class TicketControlView(discord.ui.View):
     async def log_ticket_action(self, interaction: discord.Interaction, action: str):
         """Log ticket actions to log channel"""
         try:
-            log_channel_id = config["tickets"].get("log_channel_id")
+            tcfg = get_ticket_config(interaction.guild_id)
+            log_channel_id = tcfg.get("log_channel_id")
             if not log_channel_id:
                 return
             
@@ -1272,7 +1741,7 @@ class TicketControlView(discord.ui.View):
             if not log_channel:
                 return
             
-            messages = config["tickets"]["messages"]
+            messages = tcfg.get("messages", {})
             
             if action == "closed":
                 title = messages.get("log_ticket_closed", "🔒 Ticket Closed")
@@ -1285,7 +1754,7 @@ class TicketControlView(discord.ui.View):
             
             embed = discord.Embed(
                 title=title,
-                color=parse_color(config["tickets"]["embed_color"]),
+                color=parse_color(tcfg.get("embed_color", "#9B59B6")),
                 timestamp=discord.utils.utcnow()
             )
             
@@ -1299,11 +1768,13 @@ class TicketControlView(discord.ui.View):
 
 class TicketMenuDropdown(discord.ui.Select):
     """Dropdown menu for ticket actions"""
-    def __init__(self, channel_id, owner_id):
+    def __init__(self, guild_id: int, channel_id, owner_id):
+        self.guild_id = int(guild_id)
         self.channel_id = channel_id
         self.owner_id = owner_id
-        
-        menu_cfg = config["tickets"].get("menu_options", {})
+
+        tcfg = get_ticket_config(self.guild_id)
+        menu_cfg = tcfg.get("menu_options", {})
         
         options = [
             discord.SelectOption(
@@ -1333,7 +1804,7 @@ class TicketMenuDropdown(discord.ui.Select):
         ]
         
         super().__init__(
-            placeholder=config["tickets"].get("menu_placeholder", "تحديل التكيت"),
+            placeholder=tcfg.get("menu_placeholder", "تعديل التكيت"),
             min_values=1,
             max_values=1,
             options=options,
@@ -1344,11 +1815,8 @@ class TicketMenuDropdown(discord.ui.Select):
         """Handle menu selection (ADMIN ONLY)"""
         try:
             # Check if user has admin permission
-            user_role_ids = [role.id for role in interaction.user.roles]
-            support_role_ids = config["tickets"].get("support_roles", [])
-            has_permission = any(role_id in support_role_ids for role_id in user_role_ids)
-            
-            if not has_permission:
+            control_view = TicketControlView(interaction.guild_id, interaction.channel_id, interaction.user.id)
+            if not control_view.has_permission(interaction):
                 await interaction.response.send_message("❌ ليس لديك صلاحية", ephemeral=True)
                 return
             
@@ -1472,29 +1940,31 @@ async def ticket_panel(interaction: discord.Interaction, channel: discord.TextCh
     """Create ticket panel"""
     try:
         target_channel = channel or interaction.channel
+
+        tcfg = get_ticket_config(interaction.guild_id)
         
         # Create embed
         embed = discord.Embed(
-            title=config["tickets"]["panel_title"],
-            description=config["tickets"]["panel_description"],
-            color=parse_color(config["tickets"]["embed_color"])
+            title=tcfg.get("panel_title", "🎫 Tickets | التكيت"),
+            description=tcfg.get("panel_description", "اختر نوع التكيت من القائمة أدناه | Choose a ticket type below"),
+            color=parse_color(tcfg.get("embed_color", "#9B59B6"))
         )
         
         # Add main panel image (big image)
-        if config["tickets"].get("panel_image") and config["tickets"]["panel_image"] != "YOUR IMAGE URL HERE":
-            embed.set_image(url=config["tickets"]["panel_image"])
+        if tcfg.get("panel_image") and str(tcfg.get("panel_image")).strip():
+            embed.set_image(url=str(tcfg.get("panel_image")).strip())
         
         # Add small author icon if set
-        if config["tickets"].get("panel_author_icon") and config["tickets"]["panel_author_icon"] != "YOUR ICON URL HERE":
+        if tcfg.get("panel_author_icon") and str(tcfg.get("panel_author_icon")).strip():
             embed.set_author(
-                name=config["tickets"].get("panel_author_name", "Ticket System"),
-                icon_url=config["tickets"]["panel_author_icon"]
+                name=tcfg.get("panel_author_name", "Ticket System"),
+                icon_url=str(tcfg.get("panel_author_icon")).strip()
             )
         
         embed.timestamp = discord.utils.utcnow()
         
         # Send with dropdown
-        view = TicketDropdownView()
+        view = TicketDropdownView(interaction.guild_id)
         await target_channel.send(embed=embed, view=view)
         
         await interaction.response.send_message(f"✅ Ticket panel created in {target_channel.mention}", ephemeral=True)
@@ -1509,8 +1979,9 @@ async def ticket_panel(interaction: discord.Interaction, channel: discord.TextCh
 async def ticket_category(interaction: discord.Interaction, category: discord.CategoryChannel):
     """Set ticket category"""
     try:
-        config["tickets"]["category_id"] = category.id
-        save_config(config)
+        tcfg = get_ticket_config(interaction.guild_id)
+        tcfg["category_id"] = category.id
+        update_guild_config(interaction.guild_id, {"tickets": tcfg})
         
         await interaction.response.send_message(f"✅ Ticket category set to: {category.name}", ephemeral=True)
         logger.info(f"Ticket category set to {category.id}")
@@ -1524,8 +1995,9 @@ async def ticket_category(interaction: discord.Interaction, category: discord.Ca
 async def ticket_log_channel(interaction: discord.Interaction, channel: discord.TextChannel):
     """Set ticket log channel"""
     try:
-        config["tickets"]["log_channel_id"] = channel.id
-        save_config(config)
+        tcfg = get_ticket_config(interaction.guild_id)
+        tcfg["log_channel_id"] = channel.id
+        update_guild_config(interaction.guild_id, {"tickets": tcfg})
         
         await interaction.response.send_message(f"✅ Ticket log channel set to: {channel.mention}", ephemeral=True)
         logger.info(f"Ticket log channel set to {channel.id}")
@@ -1538,24 +2010,296 @@ async def ticket_log_channel(interaction: discord.Interaction, channel: discord.
 async def ticket_setup(interaction: discord.Interaction):
     """Open interactive settings panel"""
     try:
-        embed = discord.Embed(
-            title="🎫 Ticket Settings Panel | لوحة إعدادات التكيت",
-            description="**Choose a category to edit: | اختر فئة للتعديل:**\n\n"
-                       "🎨 **Panel | اللوحة** - Title, description, images, colors | العنوان، الوصف، الصور، الألوان\n"
-                       "📋 **Options | الخيارات** - Add/edit/remove ticket options | إضافة/تعديل/حذف خيارات التكيت\n"
-                       "👥 **Roles | الأدوار** - Support & ping roles | أدوار الدعم والمنشن\n"
-                       "📝 **Messages | الرسائل** - All text & placeholders | جميع النصوص والعبارات\n"
-                       "🎛️ **Menu | القائمة** - Dropdown menu options | خيارات القائمة المنسدلة\n"
-                       "⚙️ **View | عرض** - See current settings | عرض الإعدادات الحالية",
-            color=parse_color(config["tickets"]["embed_color"])
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message(
+                "❌ You need Manage Server permission | تحتاج صلاحية إدارة السيرفر",
+                ephemeral=True,
+            )
+
+        tcfg = get_ticket_config(interaction.guild_id)
+        embed = _build_ticket_setup_embed(interaction.guild, tcfg)
+        await interaction.response.send_message(
+            embed=embed,
+            view=TicketSetupPanelView(interaction.guild_id),
+            ephemeral=True,
         )
-        
-        view = SettingsCategoryView()
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         
     except Exception as e:
         logger.error(f"Error opening settings: {e}")
         await interaction.response.send_message("❌ Error", ephemeral=True)
+
+
+def _extract_int_ids(text: str) -> list[int]:
+    if not text:
+        return []
+    ids = re.findall(r"\d{5,}", str(text))
+    out: list[int] = []
+    for raw in ids:
+        try:
+            out.append(int(raw))
+        except Exception:
+            continue
+    return out
+
+
+def _build_ticket_setup_embed(guild: discord.Guild, tcfg: dict) -> discord.Embed:
+    category = guild.get_channel(int(tcfg["category_id"])) if tcfg.get("category_id") else None
+    log_channel = guild.get_channel(int(tcfg["log_channel_id"])) if tcfg.get("log_channel_id") else None
+
+    embed = discord.Embed(
+        title="🎫 Ticket Setup | إعدادات التكيت",
+        description=(
+            "Manage ticket settings for this server.\n\n"
+            "إدارة إعدادات التكيت لهذا السيرفر."
+        ),
+        color=parse_color(tcfg.get("embed_color", "#9B59B6")),
+    )
+
+    embed.add_field(
+        name="📁 Category | التصنيف",
+        value=category.mention if category else "Not set | غير محدد",
+        inline=False,
+    )
+    embed.add_field(
+        name="📋 Log Channel | قناة السجلات",
+        value=log_channel.mention if log_channel else "Not set | غير محدد",
+        inline=False,
+    )
+    embed.add_field(
+        name="👥 Support Roles | أدوار الدعم",
+        value=" ".join(f"<@&{rid}>" for rid in (tcfg.get("support_roles") or [])) or "None | لا يوجد",
+        inline=False,
+    )
+    embed.add_field(
+        name="📢 Ping Roles | أدوار المنشن",
+        value=" ".join(f"<@&{rid}>" for rid in (tcfg.get("ping_roles") or [])) or "None | لا يوجد",
+        inline=False,
+    )
+
+    options = tcfg.get("ticket_options", []) or []
+    options_text = "\n".join(
+        f"{i+1}. {opt.get('emoji', '🎫')} {opt.get('label', '')}"
+        for i, opt in enumerate(options)
+    )
+    embed.add_field(
+        name="🎟️ Options | الخيارات",
+        value=options_text or "None | لا يوجد",
+        inline=False,
+    )
+
+    embed.set_footer(text=f"Guild: {guild.name}")
+    return embed
+
+
+class TicketSetupPanelView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=180)
+        self.guild_id = int(guild_id)
+
+    @discord.ui.button(label="Panel | اللوحة", emoji="🎨", style=discord.ButtonStyle.primary, row=0)
+    async def panel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketSetupPanelModal(self.guild_id))
+
+    @discord.ui.button(label="Channels | القنوات", emoji="📁", style=discord.ButtonStyle.primary, row=0)
+    async def channels(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketSetupChannelsModal(self.guild_id))
+
+    @discord.ui.button(label="Roles | الأدوار", emoji="👥", style=discord.ButtonStyle.primary, row=0)
+    async def roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketSetupRolesModal(self.guild_id))
+
+    @discord.ui.button(label="Add Option | إضافة خيار", emoji="➕", style=discord.ButtonStyle.success, row=1)
+    async def add_option(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketSetupAddOptionModal(self.guild_id))
+
+    @discord.ui.button(label="Remove Option | حذف خيار", emoji="🗑️", style=discord.ButtonStyle.danger, row=1)
+    async def remove_option(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketSetupRemoveOptionModal(self.guild_id))
+
+    @discord.ui.button(label="Refresh | تحديث", emoji="🔄", style=discord.ButtonStyle.secondary, row=1)
+    async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
+        tcfg = get_ticket_config(self.guild_id)
+        embed = _build_ticket_setup_embed(interaction.guild, tcfg)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+class TicketSetupPanelModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        tcfg = get_ticket_config(self.guild_id)
+        super().__init__(title="🎨 Ticket Panel Settings")
+
+        self.title_input = discord.ui.TextInput(
+            label="Panel Title",
+            default=str(tcfg.get("panel_title", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.desc_input = discord.ui.TextInput(
+            label="Panel Description",
+            default=str(tcfg.get("panel_description", ""))[:2000],
+            style=discord.TextStyle.paragraph,
+            max_length=2000,
+            required=False,
+        )
+        self.color_input = discord.ui.TextInput(
+            label="Embed Color (#RRGGBB or name)",
+            default=str(tcfg.get("embed_color", "#9B59B6"))[:32],
+            max_length=32,
+            required=False,
+        )
+        self.dropdown_ph = discord.ui.TextInput(
+            label="Dropdown Placeholder",
+            default=str(tcfg.get("dropdown_placeholder", ""))[:100],
+            max_length=100,
+            required=False,
+        )
+        self.menu_ph = discord.ui.TextInput(
+            label="Menu Placeholder",
+            default=str(tcfg.get("menu_placeholder", ""))[:100],
+            max_length=100,
+            required=False,
+        )
+
+        self.add_item(self.title_input)
+        self.add_item(self.desc_input)
+        self.add_item(self.color_input)
+        self.add_item(self.dropdown_ph)
+        self.add_item(self.menu_ph)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        tcfg = get_ticket_config(self.guild_id)
+        if self.title_input.value.strip():
+            tcfg["panel_title"] = self.title_input.value.strip()
+        if self.desc_input.value.strip():
+            tcfg["panel_description"] = self.desc_input.value.strip()
+        if self.color_input.value.strip():
+            tcfg["embed_color"] = self.color_input.value.strip()
+        if self.dropdown_ph.value.strip():
+            tcfg["dropdown_placeholder"] = self.dropdown_ph.value.strip()
+        if self.menu_ph.value.strip():
+            tcfg["menu_placeholder"] = self.menu_ph.value.strip()
+
+        update_guild_config(self.guild_id, {"tickets": tcfg})
+        await interaction.response.send_message("✅ Updated ticket panel settings", ephemeral=True)
+
+
+class TicketSetupChannelsModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        tcfg = get_ticket_config(self.guild_id)
+        super().__init__(title="📁 Ticket Channels")
+
+        self.category_id = discord.ui.TextInput(
+            label="Category ID (optional)",
+            default=str(tcfg.get("category_id") or ""),
+            required=False,
+            max_length=25,
+        )
+        self.log_channel_id = discord.ui.TextInput(
+            label="Log Channel ID (optional)",
+            default=str(tcfg.get("log_channel_id") or ""),
+            required=False,
+            max_length=25,
+        )
+        self.add_item(self.category_id)
+        self.add_item(self.log_channel_id)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        tcfg = get_ticket_config(self.guild_id)
+
+        cat_ids = _extract_int_ids(self.category_id.value)
+        log_ids = _extract_int_ids(self.log_channel_id.value)
+        tcfg["category_id"] = cat_ids[0] if cat_ids else None
+        tcfg["log_channel_id"] = log_ids[0] if log_ids else None
+
+        update_guild_config(self.guild_id, {"tickets": tcfg})
+        await interaction.response.send_message("✅ Updated ticket channels", ephemeral=True)
+
+
+class TicketSetupRolesModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        tcfg = get_ticket_config(self.guild_id)
+        super().__init__(title="👥 Ticket Roles")
+
+        self.support_roles = discord.ui.TextInput(
+            label="Support Role IDs/mentions (space separated)",
+            default=" ".join(str(rid) for rid in (tcfg.get("support_roles") or []))[:400],
+            required=False,
+            max_length=400,
+        )
+        self.ping_roles = discord.ui.TextInput(
+            label="Ping Role IDs/mentions (space separated)",
+            default=" ".join(str(rid) for rid in (tcfg.get("ping_roles") or []))[:400],
+            required=False,
+            max_length=400,
+        )
+        self.add_item(self.support_roles)
+        self.add_item(self.ping_roles)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        tcfg = get_ticket_config(self.guild_id)
+        tcfg["support_roles"] = _extract_int_ids(self.support_roles.value)
+        tcfg["ping_roles"] = _extract_int_ids(self.ping_roles.value)
+        update_guild_config(self.guild_id, {"tickets": tcfg})
+        await interaction.response.send_message("✅ Updated ticket roles", ephemeral=True)
+
+
+class TicketSetupAddOptionModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        super().__init__(title="➕ Add Ticket Option")
+
+        self.label_input = discord.ui.TextInput(label="Label", placeholder="Support | دعم", max_length=100)
+        self.emoji_input = discord.ui.TextInput(label="Emoji (optional)", required=False, max_length=20)
+        self.desc_input = discord.ui.TextInput(
+            label="Description (optional)",
+            required=False,
+            style=discord.TextStyle.paragraph,
+            max_length=100,
+        )
+        self.add_item(self.label_input)
+        self.add_item(self.emoji_input)
+        self.add_item(self.desc_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        tcfg = get_ticket_config(self.guild_id)
+        options = tcfg.get("ticket_options", []) or []
+        options.append(
+            {
+                "label": self.label_input.value.strip(),
+                "description": self.desc_input.value.strip() if self.desc_input.value else "",
+                "emoji": self.emoji_input.value.strip() if self.emoji_input.value else "🎫",
+            }
+        )
+        tcfg["ticket_options"] = options
+        update_guild_config(self.guild_id, {"tickets": tcfg})
+        await interaction.response.send_message("✅ Added ticket option", ephemeral=True)
+
+
+class TicketSetupRemoveOptionModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        super().__init__(title="🗑️ Remove Ticket Option")
+        self.index_input = discord.ui.TextInput(label="Option number", placeholder="1", max_length=4)
+        self.add_item(self.index_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        tcfg = get_ticket_config(self.guild_id)
+        options = tcfg.get("ticket_options", []) or []
+        try:
+            idx = int(self.index_input.value.strip()) - 1
+        except Exception:
+            return await interaction.response.send_message("❌ Invalid number", ephemeral=True)
+
+        if idx < 0 or idx >= len(options):
+            return await interaction.response.send_message("❌ Out of range", ephemeral=True)
+
+        options.pop(idx)
+        tcfg["ticket_options"] = options
+        update_guild_config(self.guild_id, {"tickets": tcfg})
+        await interaction.response.send_message("✅ Removed ticket option", ephemeral=True)
 
 # Settings Panel Views
 
@@ -2504,9 +3248,21 @@ def get_mod_config(guild_id):
         mod_cfg["messages"] = {}
         changed = True
 
+    # Access role gate: support both old single role and new multi-role list
+    if "allowed_role_ids" not in mod_cfg or not isinstance(mod_cfg.get("allowed_role_ids"), list):
+        mod_cfg["allowed_role_ids"] = []
+        changed = True
     if "allowed_role_id" not in mod_cfg:
         mod_cfg["allowed_role_id"] = None
         changed = True
+
+    # Migrate old single role -> list
+    if mod_cfg.get("allowed_role_id") and not mod_cfg.get("allowed_role_ids"):
+        try:
+            mod_cfg["allowed_role_ids"] = [int(mod_cfg.get("allowed_role_id"))]
+            changed = True
+        except Exception:
+            pass
 
     # Default templates (used as embed description; placeholders: {server} {reason} {duration} {moderator})
     default_messages = {
@@ -2581,14 +3337,28 @@ def build_mod_dm_embed(action, guild, moderator, reason, duration=None):
     return embed
 
 
-def _get_allowed_role_id(mod_cfg):
-    role_id = mod_cfg.get("allowed_role_id")
-    if role_id in (None, "", 0, "0"):
-        return None
+def _get_allowed_role_ids(mod_cfg) -> set[int]:
+    role_ids: set[int] = set()
+
+    # New list
+    raw_list = mod_cfg.get("allowed_role_ids")
+    if isinstance(raw_list, list):
+        for rid in raw_list:
+            try:
+                if rid not in (None, "", 0, "0"):
+                    role_ids.add(int(rid))
+            except Exception:
+                continue
+
+    # Backward-compat single role
+    raw_single = mod_cfg.get("allowed_role_id")
     try:
-        return int(role_id)
+        if raw_single not in (None, "", 0, "0"):
+            role_ids.add(int(raw_single))
     except Exception:
-        return None
+        pass
+
+    return role_ids
 
 
 def is_mod_authorized(member: discord.Member, mod_cfg, *, action: str | None = None) -> bool:
@@ -2601,11 +3371,11 @@ def is_mod_authorized(member: discord.Member, mod_cfg, *, action: str | None = N
         if member.guild_permissions.administrator:
             return True
 
-        allowed_role_id = _get_allowed_role_id(mod_cfg)
-        if not allowed_role_id:
+        allowed_role_ids = _get_allowed_role_ids(mod_cfg)
+        if not allowed_role_ids:
             return True
 
-        return any(r.id == allowed_role_id for r in getattr(member, "roles", []))
+        return any(r.id in allowed_role_ids for r in getattr(member, "roles", []))
     except Exception:
         return False
 
@@ -2917,6 +3687,96 @@ async def clear_messages(interaction: discord.Interaction, amount: int):
 async def on_message(message):
     if message.author.bot:
         return
+
+    if not message.guild:
+        return await bot.process_commands(message)
+
+    guild_cfg = get_guild_config(message.guild.id)
+
+    # ----- Poem channel processing (per server) -----
+    try:
+        poem_channel_id = guild_cfg.get("poem_channel")
+        if poem_channel_id and int(poem_channel_id) == message.channel.id:
+            embed = discord.Embed(
+                title="𝐓𝐑 • 𝐏𝐨𝐞𝐦𝐬",
+                description=f"\n\n**{message.content}**\n\n",
+                color=parse_color(guild_cfg.get("embed_color", "#9B59B6")),
+            )
+
+            if message.author.avatar:
+                embed.set_thumbnail(url=message.author.avatar.url)
+
+            embed.set_footer(
+                text=f"{message.author.display_name}",
+                icon_url=bot.user.avatar.url if bot.user and bot.user.avatar else None,
+            )
+
+            embed_message = await message.channel.send(embed=embed)
+
+            if guild_cfg.get("auto_react") and guild_cfg.get("react_emojis"):
+                for emoji in guild_cfg.get("react_emojis", []):
+                    try:
+                        await embed_message.add_reaction(str(emoji).strip())
+                    except Exception:
+                        pass
+
+            if guild_cfg.get("show_image") and guild_cfg.get("image_url"):
+                try:
+                    await message.channel.send(str(guild_cfg.get("image_url")).strip())
+                except Exception:
+                    pass
+
+            try:
+                await message.delete()
+            except Exception:
+                pass
+
+            return
+    except Exception as e:
+        logger.error(f"Poem processing error: {e}")
+
+    # ----- Auto replies -----
+    try:
+        for rule in (guild_cfg.get("auto_replies") or []):
+            if not rule or not rule.get("enabled", True):
+                continue
+            trigger = str(rule.get("trigger", "")).strip()
+            reply = str(rule.get("reply", "")).strip()
+            if not trigger or not reply:
+                continue
+
+            if _matches_trigger(
+                message.content.strip(),
+                trigger,
+                match_type=str(rule.get("match", "contains")),
+                case_sensitive=bool(rule.get("case_sensitive", False)),
+            ):
+                content = f"{message.author.mention} {reply}" if rule.get("mention", False) else reply
+                await message.channel.send(content, allowed_mentions=discord.AllowedMentions(users=bool(rule.get("mention", False))))
+                break
+    except Exception as e:
+        logger.error(f"Auto reply error: {e}")
+
+    # ----- Channel auto reply/react rules -----
+    try:
+        for rule in (guild_cfg.get("channel_auto") or []):
+            if not rule or not rule.get("enabled", True):
+                continue
+            if int(rule.get("channel_id", 0) or 0) != message.channel.id:
+                continue
+
+            reply = str(rule.get("reply", "")).strip()
+            if reply:
+                content = f"{message.author.mention} {reply}" if rule.get("mention", False) else reply
+                await message.channel.send(content, allowed_mentions=discord.AllowedMentions(users=bool(rule.get("mention", False))))
+
+            for emoji in (rule.get("reactions") or []):
+                try:
+                    await message.add_reaction(str(emoji).strip())
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.error(f"Channel auto error: {e}")
     
     # Check for shortcuts
     if message.guild:
@@ -3455,8 +4315,8 @@ class ModAccessRoleModal(discord.ui.Modal):
         super().__init__(title="🛡️ Moderation Access Role")
 
         self.role = discord.ui.TextInput(
-            label="Role mention or ID (blank = disable)",
-            placeholder="@Moderators or 1234567890",
+            label="Role mentions or IDs (blank = disable)",
+            placeholder="@Mods @Staff or 1234567890 987654321",
             style=discord.TextStyle.short,
             required=False,
             max_length=80,
@@ -3472,28 +4332,36 @@ class ModAccessRoleModal(discord.ui.Modal):
             raw = (self.role.value or "").strip()
             if not raw:
                 guild_cfg["moderation"]["allowed_role_id"] = None
+                guild_cfg["moderation"]["allowed_role_ids"] = []
                 update_guild_config(interaction.guild_id, guild_cfg)
                 return await interaction.response.send_message(
                     "✅ Role gate disabled (anyone with Discord permissions can use mod commands).",
                     ephemeral=True,
                 )
 
-            # Accept <@&id> mention or plain numeric ID
-            import re
+            # Accept multiple <@&id> mentions or plain numeric IDs
+            ids = [int(x) for x in re.findall(r"(\d{5,})", raw)]
+            if not ids:
+                return await interaction.response.send_message("❌ Invalid roles. Use role mentions or IDs.", ephemeral=True)
 
-            match = re.search(r"(\d{5,})", raw)
-            if not match:
-                return await interaction.response.send_message("❌ Invalid role. Use a role mention or ID.", ephemeral=True)
+            # Validate roles exist
+            valid_ids = []
+            valid_mentions = []
+            for rid in ids:
+                role_obj = interaction.guild.get_role(rid) if interaction.guild else None
+                if role_obj:
+                    valid_ids.append(rid)
+                    valid_mentions.append(role_obj.mention)
 
-            role_id = int(match.group(1))
-            role_obj = interaction.guild.get_role(role_id) if interaction.guild else None
-            if not role_obj:
-                return await interaction.response.send_message("❌ Role not found in this server.", ephemeral=True)
+            if not valid_ids:
+                return await interaction.response.send_message("❌ Roles not found in this server.", ephemeral=True)
 
-            guild_cfg["moderation"]["allowed_role_id"] = role_id
+            guild_cfg["moderation"]["allowed_role_id"] = None
+            guild_cfg["moderation"]["allowed_role_ids"] = list(dict.fromkeys(valid_ids))
             update_guild_config(interaction.guild_id, guild_cfg)
+
             await interaction.response.send_message(
-                f"✅ Only {role_obj.mention} can use the moderation system (admins bypass).",
+                "✅ Allowed roles updated (admins bypass): " + " ".join(valid_mentions),
                 ephemeral=True,
             )
         except Exception as e:
@@ -3703,6 +4571,89 @@ async def say_command(
         final_message = f"{content}\n{message}" if content else message
         await target_channel.send(final_message, allowed_mentions=allowed_mentions)
         await interaction.response.send_message("✅ Sent", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="embed", description="Create and send an embed | إنشاء وإرسال إيمبد")
+@app_commands.describe(
+    channel="Channel to send in (optional)",
+    title="Embed title (optional)",
+    description="Embed description/text (optional)",
+    color="Color name or hex (optional)",
+    image_url="Image URL (optional)",
+    thumbnail_url="Thumbnail URL (optional)",
+    footer="Footer text (optional)",
+)
+async def embed_command(
+    interaction: discord.Interaction,
+    channel: discord.TextChannel = None,
+    title: str = None,
+    description: str = None,
+    color: str = None,
+    image_url: str = None,
+    thumbnail_url: str = None,
+    footer: str = None,
+):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ You need Manage Messages | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        target_channel = channel or interaction.channel
+
+        if not (title or description or image_url or thumbnail_url):
+            return await interaction.response.send_message(
+                "❌ Please fill at least one field (title/description/image/thumbnail).",
+                ephemeral=True,
+            )
+
+        embed = discord.Embed(
+            title=title or discord.Embed.Empty,
+            description=description or discord.Embed.Empty,
+            color=parse_color(color or "#5865F2"),
+            timestamp=discord.utils.utcnow(),
+        )
+
+        if image_url:
+            embed.set_image(url=image_url.strip())
+        if thumbnail_url:
+            embed.set_thumbnail(url=thumbnail_url.strip())
+        if footer:
+            embed.set_footer(text=footer.strip())
+
+        await target_channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+        await interaction.response.send_message("✅ Embed sent", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="autoreply_panel", description="Auto replies panel | لوحة الردود التلقائية")
+async def autoreply_panel(interaction: discord.Interaction):
+    try:
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+
+        items = get_auto_replies_config(interaction.guild_id)
+        embed = _build_autoreply_panel_embed(interaction.guild, items)
+        view = AutoReplyPanelView(interaction.guild_id)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="channel_auto_panel", description="Channel auto reply/react panel | لوحة الردود في القنوات")
+async def channel_auto_panel(interaction: discord.Interaction):
+    try:
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+
+        items = get_channel_auto_config(interaction.guild_id)
+        embed = _build_channel_auto_panel_embed(interaction.guild, items)
+        view = ChannelAutoPanelView(interaction.guild_id)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
