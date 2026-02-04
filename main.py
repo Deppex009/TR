@@ -13,6 +13,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Deploy marker (helps confirm Discloud pulled latest code)
+DEPLOY_MARKER = "2026-02-04T00:00Z"
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
