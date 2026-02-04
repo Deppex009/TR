@@ -931,11 +931,18 @@ class AutoReplyPanelView(discord.ui.View):
 def _build_channel_auto_panel_embed(guild: discord.Guild, items: list[dict]) -> discord.Embed:
     embed = discord.Embed(
         title="📌 Channel Auto Panel | لوحة الردود في القنوات",
-        description="When someone sends a message in a configured channel, the bot replies and can react.",
+        description=(
+            "When someone sends a message in a configured channel, the bot replies and can react.\n\n"
+            "عند إرسال رسالة في قناة محددة، البوت يرد ويمكنه إضافة تفاعلات."
+        ),
         color=discord.Color.green(),
     )
     if not items:
-        embed.add_field(name="No channel rules", value="Use **Add** to create one.", inline=False)
+        embed.add_field(
+            name="No channel rules | لا توجد قواعد",
+            value="Use **Add | إضافة** to create one. | استخدم **Add | إضافة** لإضافة قاعدة.",
+            inline=False,
+        )
         return embed
 
     lines = []
@@ -947,7 +954,7 @@ def _build_channel_auto_panel_embed(guild: discord.Guild, items: list[dict]) -> 
         rep = str(r.get("reply", ""))
         if len(rep) > 60:
             rep = rep[:57] + "..."
-        ch_text = f"<#{channel_id}>" if channel_id else "(no channel)"
+        ch_text = f"<#{channel_id}>" if channel_id else "(no channel | بدون قناة)"
         lines.append(f"`{i}` {enabled} [{mention}] {ch_text} → {rep} | {reactions}")
     embed.add_field(name="Rules", value="\n".join(lines), inline=False)
     embed.set_footer(text=f"Server: {guild.name}")
@@ -956,20 +963,20 @@ def _build_channel_auto_panel_embed(guild: discord.Guild, items: list[dict]) -> 
 
 class ChannelAutoAddModal(discord.ui.Modal):
     def __init__(self, guild_id: int):
-        super().__init__(title="Add Channel Auto Rule")
+        super().__init__(title="Add Rule | إضافة قاعدة")
         self.guild_id = int(guild_id)
 
         self.channel = discord.ui.TextInput(
-            label="Channel mention or ID",
-            placeholder="#general or 1234567890",
+            label="Channel mention/ID | منشن/معرف",
+            placeholder="#general أو 1234567890",
             required=True,
             max_length=60,
         )
         self.add_item(self.channel)
 
         self.reply = discord.ui.TextInput(
-            label="Reply text",
-            placeholder="Thanks for your message!",
+            label="Reply text | نص الرد",
+            placeholder="Thanks! | شكرًا!",
             style=discord.TextStyle.paragraph,
             required=True,
             max_length=1500,
@@ -977,7 +984,7 @@ class ChannelAutoAddModal(discord.ui.Modal):
         self.add_item(self.reply)
 
         self.reactions = discord.ui.TextInput(
-            label="Reactions (space-separated, optional)",
+            label="Reactions (space) | تفاعلات",
             placeholder="✅ 🔥",
             required=False,
             max_length=200,
@@ -985,7 +992,7 @@ class ChannelAutoAddModal(discord.ui.Modal):
         self.add_item(self.reactions)
 
         self.mention = discord.ui.TextInput(
-            label="Mention user in reply? yes/no",
+            label="Mention? yes/no | منشن؟",
             placeholder="no",
             required=False,
             max_length=10,
@@ -993,7 +1000,7 @@ class ChannelAutoAddModal(discord.ui.Modal):
         self.add_item(self.mention)
 
         self.enabled = discord.ui.TextInput(
-            label="Enabled? yes/no",
+            label="Enabled? yes/no | مفعل؟",
             placeholder="yes",
             required=False,
             max_length=10,
@@ -1002,16 +1009,19 @@ class ChannelAutoAddModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         if not interaction.guild:
-            return await interaction.response.send_message("❌ Server only", ephemeral=True)
+            return await interaction.response.send_message("❌ Server only | للسيرفر فقط", ephemeral=True)
 
         raw = self.channel.value.strip()
         m = re.search(r"(\d{5,})", raw)
         if not m:
-            return await interaction.response.send_message("❌ Invalid channel.", ephemeral=True)
+            return await interaction.response.send_message("❌ Invalid channel | قناة غير صحيحة", ephemeral=True)
         channel_id = int(m.group(1))
         channel_obj = interaction.guild.get_channel(channel_id)
         if not channel_obj:
-            return await interaction.response.send_message("❌ Channel not found in this server.", ephemeral=True)
+            return await interaction.response.send_message(
+                "❌ Channel not found | القناة غير موجودة في هذا السيرفر",
+                ephemeral=True,
+            )
 
         items = get_channel_auto_config(interaction.guild_id)
         reactions = [e.strip() for e in (self.reactions.value or "").split() if e.strip()]
@@ -1025,17 +1035,18 @@ class ChannelAutoAddModal(discord.ui.Modal):
             }
         )
         update_guild_config(interaction.guild_id, {"channel_auto": items})
-        await interaction.response.send_message("✅ Channel auto rule added.", ephemeral=True)
+        await interaction.response.send_message("✅ Rule added | تم إضافة القاعدة", ephemeral=True)
 
 
 class ChannelAutoIndexModal(discord.ui.Modal):
     def __init__(self, guild_id: int, mode: str):
-        super().__init__(title=f"Channel Auto: {mode.title()}")
+        ar = {"remove": "حذف", "toggle": "تفعيل"}.get(str(mode).lower(), "إجراء")
+        super().__init__(title=f"{mode.title()} | {ar}")
         self.guild_id = int(guild_id)
         self.mode = mode
 
         self.index = discord.ui.TextInput(
-            label="Rule number (from panel)",
+            label="Rule # (panel) | رقم القاعدة",
             placeholder="1",
             required=True,
             max_length=5,
@@ -1047,24 +1058,30 @@ class ChannelAutoIndexModal(discord.ui.Modal):
         try:
             idx = int(self.index.value)
         except Exception:
-            return await interaction.response.send_message("❌ Invalid number.", ephemeral=True)
+            return await interaction.response.send_message("❌ Invalid number | رقم غير صحيح", ephemeral=True)
 
         if idx < 1 or idx > len(items):
-            return await interaction.response.send_message("❌ Out of range.", ephemeral=True)
+            return await interaction.response.send_message("❌ Out of range | خارج النطاق", ephemeral=True)
 
         i = idx - 1
         if self.mode == "remove":
             removed = items.pop(i)
             update_guild_config(interaction.guild_id, {"channel_auto": items})
-            return await interaction.response.send_message(f"✅ Removed rule for <#{removed.get('channel_id')}>.", ephemeral=True)
+            return await interaction.response.send_message(
+                f"✅ Removed | تم الحذف: <#{removed.get('channel_id')}>",
+                ephemeral=True,
+            )
 
         if self.mode == "toggle":
             items[i]["enabled"] = not items[i].get("enabled", True)
             update_guild_config(interaction.guild_id, {"channel_auto": items})
-            state = "enabled" if items[i]["enabled"] else "disabled"
-            return await interaction.response.send_message(f"✅ Toggled rule {idx} ({state}).", ephemeral=True)
+            state = "enabled | مفعل" if items[i]["enabled"] else "disabled | معطل"
+            return await interaction.response.send_message(
+                f"✅ Toggled | تم التفعيل/التعطيل: {idx} ({state})",
+                ephemeral=True,
+            )
 
-        await interaction.response.send_message("❌ Unknown action.", ephemeral=True)
+        await interaction.response.send_message("❌ Unknown action | إجراء غير معروف", ephemeral=True)
 
 
 class ChannelAutoPanelView(discord.ui.View):
@@ -1077,25 +1094,25 @@ class ChannelAutoPanelView(discord.ui.View):
         embed = _build_channel_auto_panel_embed(interaction.guild, items)
         await interaction.response.edit_message(embed=embed, view=self)
 
-    @discord.ui.button(label="Add", style=discord.ButtonStyle.success, row=0)
+    @discord.ui.button(label="Add | إضافة", style=discord.ButtonStyle.success, row=0)
     async def add_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(ChannelAutoAddModal(self.guild_id))
 
-    @discord.ui.button(label="Remove", style=discord.ButtonStyle.danger, row=0)
+    @discord.ui.button(label="Remove | حذف", style=discord.ButtonStyle.danger, row=0)
     async def remove_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(ChannelAutoIndexModal(self.guild_id, "remove"))
 
-    @discord.ui.button(label="Toggle", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Toggle | تفعيل", style=discord.ButtonStyle.primary, row=0)
     async def toggle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(ChannelAutoIndexModal(self.guild_id, "toggle"))
 
-    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, row=0)
+    @discord.ui.button(label="Refresh | تحديث", style=discord.ButtonStyle.secondary, row=0)
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._refresh(interaction)
 
@@ -1595,18 +1612,22 @@ async def poem_setup(interaction: discord.Interaction):
     """Open poem settings panel"""
     try:
         if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("❌ You need Administrator permission", ephemeral=True)
+            return await interaction.response.send_message(
+                "❌ Administrator required | تحتاج صلاحية المدير",
+                ephemeral=True,
+            )
         
         guild_cfg = get_guild_config(interaction.guild_id)
         view = PoemSettingsView()
         embed = discord.Embed(
             title="📝 Poem Settings Panel | لوحة إعدادات الأشعار",
-            description="**Configure poem system:**\n\n"
-                       "📍 **Channel** - Set poem channel\n"
-                       "🎨 **Appearance** - Colors, images, reactions\n"
-                       "📋 **View Settings** - See current configuration\n\n"
-                       "Use the dashboard for full control:\n"
-                       f"http://localhost:5000",
+            description=(
+                "**Configure poem system | إعداد نظام الشعر:**\n\n"
+                "📍 **Channel | القناة** - Set poem channel | تحديد قناة الشعر\n"
+                "🎨 **Appearance | المظهر** - Colors/images/reactions | ألوان/صور/تفاعلات\n\n"
+                "Use the dashboard for full control | استخدم لوحة التحكم للتحكم الكامل:\n"
+                "http://localhost:5000"
+            ),
             color=parse_color(guild_cfg.get("embed_color", "#9B59B6"))
         )
         embed.set_footer(text=interaction.guild.name)
@@ -1630,9 +1651,9 @@ class PoemSettingsView(discord.ui.View):
 
 class PoemChannelModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="📍 Set Poem Channel")
+        super().__init__(title="📍 Poem Channel | قناة الشعر")
         
-        self.channel = discord.ui.TextInput(label="Channel ID", placeholder="1234567890", required=True)
+        self.channel = discord.ui.TextInput(label="Channel ID | معرف القناة", placeholder="1234567890", required=True)
         self.add_item(self.channel)
     
     async def on_submit(self, interaction: discord.Interaction):
@@ -1640,24 +1661,27 @@ class PoemChannelModal(discord.ui.Modal):
             channel_id = int(self.channel.value)
             update_guild_config(interaction.guild_id, {"poem_channel": channel_id})
             channel = bot.get_channel(channel_id)
-            await interaction.response.send_message(f"✅ Poem channel set to {channel.mention if channel else channel_id}", ephemeral=True)
+            await interaction.response.send_message(
+                f"✅ Poem channel set | تم تعيين قناة الشعر: {channel.mention if channel else channel_id}",
+                ephemeral=True,
+            )
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
 class PoemAppearanceModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="🎨 Poem Appearance")
+        super().__init__(title="🎨 Poem Appearance | المظهر")
         
-        self.color = discord.ui.TextInput(label="Embed Color (hex)", placeholder="#9B59B6 or 9B59B6", required=False)
+        self.color = discord.ui.TextInput(label="Embed Color | لون الامبد", placeholder="#9B59B6 أو 9B59B6", required=False)
         self.add_item(self.color)
         
-        self.image_url = discord.ui.TextInput(label="Image URL", placeholder="https://...", required=False)
+        self.image_url = discord.ui.TextInput(label="Image URL | رابط الصورة", placeholder="https://...", required=False)
         self.add_item(self.image_url)
         
-        self.show_image = discord.ui.TextInput(label="Show Image? (yes/no)", placeholder="yes", required=False)
+        self.show_image = discord.ui.TextInput(label="Show image? yes/no | عرض؟", placeholder="yes", required=False)
         self.add_item(self.show_image)
         
-        self.auto_react = discord.ui.TextInput(label="Auto React? (yes/no)", placeholder="no", required=False)
+        self.auto_react = discord.ui.TextInput(label="Auto react? yes/no | تفاعل؟", placeholder="no", required=False)
         self.add_item(self.auto_react)
     
     async def on_submit(self, interaction: discord.Interaction):
@@ -1673,7 +1697,7 @@ class PoemAppearanceModal(discord.ui.Modal):
                 updates["auto_react"] = self.auto_react.value.lower() in ["yes", "true", "1"]
             
             update_guild_config(interaction.guild_id, updates)
-            await interaction.response.send_message("✅ Poem appearance updated!", ephemeral=True)
+            await interaction.response.send_message("✅ Updated | تم تحديث المظهر", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Error: {str(e)}", ephemeral=True)
 
@@ -1857,15 +1881,15 @@ class TicketReasonModal(discord.ui.Modal):
             messages = tcfg.get("messages", {})
             
             embed = discord.Embed(
-                title=messages.get("log_ticket_opened", "📬 Ticket Opened"),
+                title=messages.get("log_ticket_opened", "📬 Ticket Opened | فتح تذكرة"),
                 color=parse_color(tcfg.get("embed_color", "#9B59B6")),
                 timestamp=discord.utils.utcnow()
             )
             
-            embed.add_field(name=messages.get("log_opened_by", "Opened By"), value=interaction.user.mention, inline=True)
-            embed.add_field(name=messages.get("log_channel", "Channel"), value=ticket_channel.mention, inline=True)
+            embed.add_field(name=messages.get("log_opened_by", "Opened By | بواسطة"), value=interaction.user.mention, inline=True)
+            embed.add_field(name=messages.get("log_channel", "Channel | القناة"), value=ticket_channel.mention, inline=True)
             embed.add_field(name="#", value=str(ticket_num), inline=True)
-            embed.add_field(name=messages.get("log_reason", "Reason"), value=reason, inline=False)
+            embed.add_field(name=messages.get("log_reason", "Reason | السبب"), value=reason, inline=False)
             
             await log_channel.send(embed=embed)
             
@@ -1898,7 +1922,7 @@ class TicketControlView(discord.ui.View):
         # Close button (ADMIN ONLY)
         close_style = style_map.get(tcfg.get("buttons", {}).get("close_style", "danger").lower(), discord.ButtonStyle.danger)
         close_btn = discord.ui.Button(
-            label=tcfg.get("buttons", {}).get("close", "CLOSE"),
+            label=tcfg.get("buttons", {}).get("close", "Close | إغلاق"),
             emoji=tcfg.get("buttons", {}).get("close_emoji", "🔒"),
             style=close_style,
             custom_id=f"ticket_close_{channel_id}"
@@ -1909,7 +1933,7 @@ class TicketControlView(discord.ui.View):
         # Claim button (ADMIN ONLY)
         claim_style = style_map.get(tcfg.get("buttons", {}).get("claim_style", "primary").lower(), discord.ButtonStyle.primary)
         claim_btn = discord.ui.Button(
-            label=tcfg.get("buttons", {}).get("claim", "CLAIM"),
+            label=tcfg.get("buttons", {}).get("claim", "Claim | استلام"),
             emoji=tcfg.get("buttons", {}).get("claim_emoji", "👥"),
             style=claim_style,
             custom_id=f"ticket_claim_{channel_id}"
@@ -1920,7 +1944,7 @@ class TicketControlView(discord.ui.View):
         # Ping Admin button (MEMBER CAN USE)
         ping_admin_style = style_map.get(tcfg.get("buttons", {}).get("ping_admin_style", "secondary").lower(), discord.ButtonStyle.secondary)
         ping_admin_btn = discord.ui.Button(
-            label=tcfg.get("buttons", {}).get("ping_admin", "استدعاء الإدارة"),
+            label=tcfg.get("buttons", {}).get("ping_admin", "Ping Admin | منشن الإدارة"),
             emoji=tcfg.get("buttons", {}).get("ping_admin_emoji", "📢"),
             style=ping_admin_style,
             custom_id=f"ticket_ping_admin_{channel_id}"
@@ -1931,7 +1955,7 @@ class TicketControlView(discord.ui.View):
         # Mention Member button (ADMIN ONLY)
         mention_member_style = style_map.get(tcfg.get("buttons", {}).get("mention_member_style", "secondary").lower(), discord.ButtonStyle.secondary)
         mention_member_btn = discord.ui.Button(
-            label=tcfg.get("buttons", {}).get("mention_member", "منشن العضو"),
+            label=tcfg.get("buttons", {}).get("mention_member", "Mention Member | منشن العضو"),
             emoji=tcfg.get("buttons", {}).get("mention_member_emoji", "👤"),
             style=mention_member_style,
             custom_id=f"ticket_mention_member_{channel_id}"
@@ -2094,11 +2118,11 @@ class TicketControlView(discord.ui.View):
             messages = tcfg.get("messages", {})
             
             if action == "closed":
-                title = messages.get("log_ticket_closed", "🔒 Ticket Closed")
-                by_label = messages.get("log_closed_by", "Closed By")
+                title = messages.get("log_ticket_closed", "🔒 Ticket Closed | إغلاق تذكرة")
+                by_label = messages.get("log_closed_by", "Closed By | بواسطة")
             elif action == "claimed":
-                title = messages.get("log_ticket_claimed", "👥 Ticket Claimed")
-                by_label = messages.get("log_claimed_by", "Claimed By")
+                title = messages.get("log_ticket_claimed", "👥 Ticket Claimed | استلام تذكرة")
+                by_label = messages.get("log_claimed_by", "Claimed By | بواسطة")
             else:
                 return
             
@@ -2109,7 +2133,7 @@ class TicketControlView(discord.ui.View):
             )
             
             embed.add_field(name=by_label, value=interaction.user.mention, inline=True)
-            embed.add_field(name=messages.get("log_channel", "Channel"), value=interaction.channel.mention, inline=True)
+            embed.add_field(name=messages.get("log_channel", "Channel | القناة"), value=interaction.channel.mention, inline=True)
             
             await log_channel.send(embed=embed)
             
@@ -2128,33 +2152,33 @@ class TicketMenuDropdown(discord.ui.Select):
         
         options = [
             discord.SelectOption(
-                label=menu_cfg.get("rename", {}).get("label", "Rename"),
+                label=menu_cfg.get("rename", {}).get("label", "Rename | تغيير الاسم"),
                 emoji=menu_cfg.get("rename", {}).get("emoji", "✏️"),
-                description=menu_cfg.get("rename", {}).get("description", "تغيير اسم التكيت"),
+                description=menu_cfg.get("rename", {}).get("description", "Rename the ticket | تغيير اسم التكيت"),
                 value="rename"
             ),
             discord.SelectOption(
-                label=menu_cfg.get("add_user", {}).get("label", "Add User"),
+                label=menu_cfg.get("add_user", {}).get("label", "Add User | إضافة عضو"),
                 emoji=menu_cfg.get("add_user", {}).get("emoji", "👤"),
-                description=menu_cfg.get("add_user", {}).get("description", "اضافة عضو للتكيت"),
+                description=menu_cfg.get("add_user", {}).get("description", "Add member | إضافة عضو للتكيت"),
                 value="add_user"
             ),
             discord.SelectOption(
-                label=menu_cfg.get("remove_user", {}).get("label", "Remove User"),
+                label=menu_cfg.get("remove_user", {}).get("label", "Remove User | إزالة عضو"),
                 emoji=menu_cfg.get("remove_user", {}).get("emoji", "🚫"),
-                description=menu_cfg.get("remove_user", {}).get("description", "إزالة عضو من التكيت"),
+                description=menu_cfg.get("remove_user", {}).get("description", "Remove member | إزالة عضو من التكيت"),
                 value="remove_user"
             ),
             discord.SelectOption(
-                label=menu_cfg.get("reset", {}).get("label", "Reset Menu"),
+                label=menu_cfg.get("reset", {}).get("label", "Reset | إعادة ضبط"),
                 emoji=menu_cfg.get("reset", {}).get("emoji", "🔄"),
-                description=menu_cfg.get("reset", {}).get("description", "إعادة تعيين القائمة"),
+                description=menu_cfg.get("reset", {}).get("description", "Reset menu | إعادة تعيين القائمة"),
                 value="reset"
             )
         ]
         
         super().__init__(
-            placeholder=tcfg.get("menu_placeholder", "تعديل التكيت"),
+            placeholder=tcfg.get("menu_placeholder", "Edit Ticket | تعديل التكيت"),
             min_values=1,
             max_values=1,
             options=options,
@@ -2167,14 +2191,14 @@ class TicketMenuDropdown(discord.ui.Select):
             # Check if user has admin permission
             control_view = TicketControlView(interaction.guild_id, interaction.channel_id, interaction.user.id)
             if not control_view.has_permission(interaction):
-                await interaction.response.send_message("❌ ليس لديك صلاحية", ephemeral=True)
+                await interaction.response.send_message("❌ No permission | ليس لديك صلاحية", ephemeral=True)
                 return
             
             action = self.values[0]
             
             if action == "reset":
                 # Reset the menu by updating the message
-                await interaction.response.send_message("🔄 تم إعادة تعيين القائمة", ephemeral=True, delete_after=2)
+                await interaction.response.send_message("🔄 Menu reset | تم إعادة تعيين القائمة", ephemeral=True, delete_after=2)
                 return
             
             elif action == "rename":
@@ -2194,16 +2218,16 @@ class TicketMenuDropdown(discord.ui.Select):
                 
         except Exception as e:
             logger.error(f"Error in menu action: {e}")
-            await interaction.response.send_message("❌ خطأ", ephemeral=True)
+            await interaction.response.send_message("❌ Error | خطأ", ephemeral=True)
 
 class RenameTicketModal(discord.ui.Modal):
     """Modal for renaming ticket"""
     def __init__(self, channel):
-        super().__init__(title="تغيير اسم التكيت")
+        super().__init__(title="Rename Ticket | تغيير الاسم")
         self.channel = channel
         
         self.new_name = discord.ui.TextInput(
-            label="الاسم الجديد",
+            label="New name | الاسم الجديد",
             placeholder="ticket-new-name",
             required=True,
             max_length=100
@@ -2214,19 +2238,19 @@ class RenameTicketModal(discord.ui.Modal):
         try:
             new_name = self.new_name.value.strip().replace(" ", "-")
             await self.channel.edit(name=new_name)
-            await interaction.response.send_message(f"✅ تم تغيير الاسم إلى: {new_name}", ephemeral=True)
+            await interaction.response.send_message(f"✅ Renamed | تم تغيير الاسم إلى: {new_name}", ephemeral=True)
         except Exception as e:
             logger.error(f"Error renaming ticket: {e}")
-            await interaction.response.send_message("❌ خطأ في تغيير الاسم", ephemeral=True)
+            await interaction.response.send_message("❌ Rename failed | خطأ في تغيير الاسم", ephemeral=True)
 
 class AddUserModal(discord.ui.Modal):
     """Modal for adding user to ticket"""
     def __init__(self, channel):
-        super().__init__(title="اضافة عضو للتكيت")
+        super().__init__(title="Add User | إضافة عضو")
         self.channel = channel
         
         self.user_input = discord.ui.TextInput(
-            label="معرف العضو أو المنشن",
+            label="User mention/ID | منشن/معرف العضو",
             placeholder="@user أو 123456789",
             required=True
         )
@@ -2240,24 +2264,24 @@ class AddUserModal(discord.ui.Modal):
             
             member = interaction.guild.get_member(user_id)
             if not member:
-                await interaction.response.send_message("❌ لم يتم العثور على العضو", ephemeral=True)
+                await interaction.response.send_message("❌ Member not found | لم يتم العثور على العضو", ephemeral=True)
                 return
             
             await self.channel.set_permissions(member, read_messages=True, send_messages=True)
-            await interaction.response.send_message(f"✅ تمت اضافة {member.mention} للتكيت")
+            await interaction.response.send_message(f"✅ Added | تمت إضافة {member.mention} للتكيت")
             
         except Exception as e:
             logger.error(f"Error adding user: {e}")
-            await interaction.response.send_message("❌ خطأ في اضافة العضو", ephemeral=True)
+            await interaction.response.send_message("❌ Add failed | خطأ في إضافة العضو", ephemeral=True)
 
 class RemoveUserModal(discord.ui.Modal):
     """Modal for removing user from ticket"""
     def __init__(self, channel):
-        super().__init__(title="إزالة عضو من التكيت")
+        super().__init__(title="Remove User | إزالة عضو")
         self.channel = channel
         
         self.user_input = discord.ui.TextInput(
-            label="معرف العضو أو المنشن",
+            label="User mention/ID | منشن/معرف العضو",
             placeholder="@user أو 123456789",
             required=True
         )
@@ -2271,15 +2295,15 @@ class RemoveUserModal(discord.ui.Modal):
             
             member = interaction.guild.get_member(user_id)
             if not member:
-                await interaction.response.send_message("❌ لم يتم العثور على العضو", ephemeral=True)
+                await interaction.response.send_message("❌ Member not found | لم يتم العثور على العضو", ephemeral=True)
                 return
             
             await self.channel.set_permissions(member, overwrite=None)
-            await interaction.response.send_message(f"✅ تمت إزالة {member.mention} من التكيت")
+            await interaction.response.send_message(f"✅ Removed | تمت إزالة {member.mention} من التكيت")
             
         except Exception as e:
             logger.error(f"Error removing user: {e}")
-            await interaction.response.send_message("❌ خطأ في إزالة العضو", ephemeral=True)
+            await interaction.response.send_message("❌ Remove failed | خطأ في إزالة العضو", ephemeral=True)
 
 
 # Ticket Commands
@@ -2317,12 +2341,15 @@ async def ticket_panel(interaction: discord.Interaction, channel: discord.TextCh
         view = TicketDropdownView(interaction.guild_id)
         await target_channel.send(embed=embed, view=view)
         
-        await interaction.response.send_message(f"✅ Ticket panel created in {target_channel.mention}", ephemeral=True)
+        await interaction.response.send_message(
+            f"✅ Ticket panel created | تم إنشاء لوحة التكيت في {target_channel.mention}",
+            ephemeral=True,
+        )
         logger.info(f"Ticket panel created by {interaction.user}")
         
     except Exception as e:
         logger.error(f"Error creating ticket panel: {e}", exc_info=True)
-        await interaction.response.send_message(f"❌ Error creating panel: {str(e)}", ephemeral=True)
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 @bot.tree.command(name="ticket_category", description="Set ticket category | تعيين تصنيف التكيت")
 @app_commands.describe(category="Category for tickets | التصنيف للتكيت")
@@ -2333,12 +2360,15 @@ async def ticket_category(interaction: discord.Interaction, category: discord.Ca
         tcfg["category_id"] = category.id
         update_guild_config(interaction.guild_id, {"tickets": tcfg})
         
-        await interaction.response.send_message(f"✅ Ticket category set to: {category.name}", ephemeral=True)
+        await interaction.response.send_message(
+            f"✅ Category set | تم تعيين التصنيف إلى: {category.name}",
+            ephemeral=True,
+        )
         logger.info(f"Ticket category set to {category.id}")
         
     except Exception as e:
         logger.error(f"Error setting category: {e}")
-        await interaction.response.send_message("❌ Error", ephemeral=True)
+        await interaction.response.send_message("❌ Error | خطأ", ephemeral=True)
 
 @bot.tree.command(name="ticket_log_channel", description="Set ticket log channel | تعيين قناة سجل التكيت")
 @app_commands.describe(channel="Channel for ticket logs | قناة سجلات التكيت")
@@ -2349,12 +2379,15 @@ async def ticket_log_channel(interaction: discord.Interaction, channel: discord.
         tcfg["log_channel_id"] = channel.id
         update_guild_config(interaction.guild_id, {"tickets": tcfg})
         
-        await interaction.response.send_message(f"✅ Ticket log channel set to: {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(
+            f"✅ Log channel set | تم تعيين قناة السجلات إلى: {channel.mention}",
+            ephemeral=True,
+        )
         logger.info(f"Ticket log channel set to {channel.id}")
         
     except Exception as e:
         logger.error(f"Error setting log channel: {e}")
-        await interaction.response.send_message("❌ Error", ephemeral=True)
+        await interaction.response.send_message("❌ Error | خطأ", ephemeral=True)
 
 @bot.tree.command(name="ticket_setup", description="Open ticket settings panel | فتح لوحة إعدادات التكيت")
 async def ticket_setup(interaction: discord.Interaction):
@@ -2437,7 +2470,7 @@ def _build_ticket_setup_embed(guild: discord.Guild, tcfg: dict) -> discord.Embed
         inline=False,
     )
 
-    embed.set_footer(text=f"Guild: {guild.name}")
+    embed.set_footer(text=guild.name)
     return embed
 
 
@@ -2477,35 +2510,35 @@ class TicketSetupPanelModal(discord.ui.Modal):
     def __init__(self, guild_id: int):
         self.guild_id = int(guild_id)
         tcfg = get_ticket_config(self.guild_id)
-        super().__init__(title="🎨 Ticket Panel Settings")
+        super().__init__(title="🎨 Panel | اللوحة")
 
         self.title_input = discord.ui.TextInput(
-            label="Panel Title",
+            label="Panel title | عنوان اللوحة",
             default=str(tcfg.get("panel_title", ""))[:256],
             max_length=256,
             required=False,
         )
         self.desc_input = discord.ui.TextInput(
-            label="Panel Description",
+            label="Description | الوصف",
             default=str(tcfg.get("panel_description", ""))[:2000],
             style=discord.TextStyle.paragraph,
             max_length=2000,
             required=False,
         )
         self.color_input = discord.ui.TextInput(
-            label="Embed Color (#RRGGBB or name)",
+            label="Embed color | لون الامبد",
             default=str(tcfg.get("embed_color", "#9B59B6"))[:32],
             max_length=32,
             required=False,
         )
         self.dropdown_ph = discord.ui.TextInput(
-            label="Dropdown Placeholder",
+            label="Dropdown placeholder | عبارة القائمة",
             default=str(tcfg.get("dropdown_placeholder", ""))[:100],
             max_length=100,
             required=False,
         )
         self.menu_ph = discord.ui.TextInput(
-            label="Menu Placeholder",
+            label="Menu placeholder | عبارة القائمة",
             default=str(tcfg.get("menu_placeholder", ""))[:100],
             max_length=100,
             required=False,
@@ -2531,23 +2564,23 @@ class TicketSetupPanelModal(discord.ui.Modal):
             tcfg["menu_placeholder"] = self.menu_ph.value.strip()
 
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_message("✅ Updated ticket panel settings", ephemeral=True)
+        await interaction.response.send_message("✅ Updated | تم تحديث إعدادات اللوحة", ephemeral=True)
 
 
 class TicketSetupChannelsModal(discord.ui.Modal):
     def __init__(self, guild_id: int):
         self.guild_id = int(guild_id)
         tcfg = get_ticket_config(self.guild_id)
-        super().__init__(title="📁 Ticket Channels")
+        super().__init__(title="📁 Channels | القنوات")
 
         self.category_id = discord.ui.TextInput(
-            label="Category ID (optional)",
+            label="Category ID (opt) | معرف التصنيف",
             default=str(tcfg.get("category_id") or ""),
             required=False,
             max_length=25,
         )
         self.log_channel_id = discord.ui.TextInput(
-            label="Log Channel ID (optional)",
+            label="Log channel ID (opt) | معرف السجل",
             default=str(tcfg.get("log_channel_id") or ""),
             required=False,
             max_length=25,
@@ -2564,23 +2597,23 @@ class TicketSetupChannelsModal(discord.ui.Modal):
         tcfg["log_channel_id"] = log_ids[0] if log_ids else None
 
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_message("✅ Updated ticket channels", ephemeral=True)
+        await interaction.response.send_message("✅ Updated | تم تحديث القنوات", ephemeral=True)
 
 
 class TicketSetupRolesModal(discord.ui.Modal):
     def __init__(self, guild_id: int):
         self.guild_id = int(guild_id)
         tcfg = get_ticket_config(self.guild_id)
-        super().__init__(title="👥 Ticket Roles")
+        super().__init__(title="👥 Roles | الأدوار")
 
         self.support_roles = discord.ui.TextInput(
-            label="Support Role IDs/mentions (space separated)",
+            label="Support roles | أدوار الدعم",
             default=" ".join(str(rid) for rid in (tcfg.get("support_roles") or []))[:400],
             required=False,
             max_length=400,
         )
         self.ping_roles = discord.ui.TextInput(
-            label="Ping Role IDs/mentions (space separated)",
+            label="Ping roles | أدوار المنشن",
             default=" ".join(str(rid) for rid in (tcfg.get("ping_roles") or []))[:400],
             required=False,
             max_length=400,
@@ -2593,18 +2626,18 @@ class TicketSetupRolesModal(discord.ui.Modal):
         tcfg["support_roles"] = _extract_int_ids(self.support_roles.value)
         tcfg["ping_roles"] = _extract_int_ids(self.ping_roles.value)
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_message("✅ Updated ticket roles", ephemeral=True)
+        await interaction.response.send_message("✅ Updated | تم تحديث الأدوار", ephemeral=True)
 
 
 class TicketSetupAddOptionModal(discord.ui.Modal):
     def __init__(self, guild_id: int):
         self.guild_id = int(guild_id)
-        super().__init__(title="➕ Add Ticket Option")
+        super().__init__(title="➕ Add Option | إضافة خيار")
 
-        self.label_input = discord.ui.TextInput(label="Label", placeholder="Support | دعم", max_length=100)
-        self.emoji_input = discord.ui.TextInput(label="Emoji (optional)", required=False, max_length=20)
+        self.label_input = discord.ui.TextInput(label="Label | الاسم", placeholder="Support | دعم", max_length=100)
+        self.emoji_input = discord.ui.TextInput(label="Emoji (opt) | ايموجي", required=False, max_length=20)
         self.desc_input = discord.ui.TextInput(
-            label="Description (optional)",
+            label="Description (opt) | الوصف",
             required=False,
             style=discord.TextStyle.paragraph,
             max_length=100,
@@ -2625,14 +2658,14 @@ class TicketSetupAddOptionModal(discord.ui.Modal):
         )
         tcfg["ticket_options"] = options
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_message("✅ Added ticket option", ephemeral=True)
+        await interaction.response.send_message("✅ Added | تمت إضافة الخيار", ephemeral=True)
 
 
 class TicketSetupRemoveOptionModal(discord.ui.Modal):
     def __init__(self, guild_id: int):
         self.guild_id = int(guild_id)
-        super().__init__(title="🗑️ Remove Ticket Option")
-        self.index_input = discord.ui.TextInput(label="Option number", placeholder="1", max_length=4)
+        super().__init__(title="🗑️ Remove | حذف")
+        self.index_input = discord.ui.TextInput(label="Option # | رقم الخيار", placeholder="1", max_length=4)
         self.add_item(self.index_input)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -2641,15 +2674,15 @@ class TicketSetupRemoveOptionModal(discord.ui.Modal):
         try:
             idx = int(self.index_input.value.strip()) - 1
         except Exception:
-            return await interaction.response.send_message("❌ Invalid number", ephemeral=True)
+            return await interaction.response.send_message("❌ Invalid number | رقم غير صحيح", ephemeral=True)
 
         if idx < 0 or idx >= len(options):
-            return await interaction.response.send_message("❌ Out of range", ephemeral=True)
+            return await interaction.response.send_message("❌ Out of range | خارج النطاق", ephemeral=True)
 
         options.pop(idx)
         tcfg["ticket_options"] = options
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_message("✅ Removed ticket option", ephemeral=True)
+        await interaction.response.send_message("✅ Removed | تم حذف الخيار", ephemeral=True)
 
 # Settings Panel Views
 
@@ -3483,38 +3516,38 @@ class MenuOptionsView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=180)
     
-    @discord.ui.button(label="Rename", emoji="✏️", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Rename | تغيير", emoji="✏️", style=discord.ButtonStyle.primary, row=0)
     async def rename_option(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = EditMenuOptionModal("rename")
         await interaction.response.send_modal(modal)
     
-    @discord.ui.button(label="Add User", emoji="👤", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Add User | إضافة", emoji="👤", style=discord.ButtonStyle.primary, row=0)
     async def add_user_option(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = EditMenuOptionModal("add_user")
         await interaction.response.send_modal(modal)
     
-    @discord.ui.button(label="Remove User", emoji="🚫", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Remove User | إزالة", emoji="🚫", style=discord.ButtonStyle.primary, row=0)
     async def remove_user_option(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = EditMenuOptionModal("remove_user")
         await interaction.response.send_modal(modal)
     
-    @discord.ui.button(label="Reset", emoji="🔄", style=discord.ButtonStyle.primary, row=1)
+    @discord.ui.button(label="Reset | إعادة", emoji="🔄", style=discord.ButtonStyle.primary, row=1)
     async def reset_option(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = EditMenuOptionModal("reset")
         await interaction.response.send_modal(modal)
     
-    @discord.ui.button(label="Back", emoji="◀️", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Back | رجوع", emoji="◀️", style=discord.ButtonStyle.secondary, row=1)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = SettingsCategoryView()
         embed = discord.Embed(
-            title="🎫 Ticket Settings Panel",
-            description="**Choose a category to edit:**\n\n"
-                       "🎨 **Panel** - Title, description, images, colors\n"
-                       "📋 **Options** - Add/edit/remove ticket options\n"
-                       "👥 **Roles** - Support & ping roles\n"
-                       "📝 **Messages** - All text & placeholders\n"
-                       "🎛️ **Menu** - Dropdown menu options\n"
-                       "⚙️ **View** - See current settings",
+            title="🎫 Ticket Settings Panel | لوحة إعدادات التكيت",
+            description="**Choose a category to edit: | اختر فئة للتعديل:**\n\n"
+                       "🎨 **Panel | اللوحة** - Title/desc/images/colors | العنوان/الوصف/الصور/الألوان\n"
+                       "📋 **Options | الخيارات** - Add/edit/remove options | إضافة/تعديل/حذف\n"
+                       "👥 **Roles | الأدوار** - Support & ping roles | أدوار الدعم والمنشن\n"
+                       "📝 **Messages | الرسائل** - All text & placeholders | جميع النصوص\n"
+                       "🎛️ **Menu | القائمة** - Dropdown menu options | خيارات القائمة\n"
+                       "⚙️ **View | عرض** - See current settings | عرض الإعدادات",
             color=parse_color(config["tickets"]["embed_color"])
         )
         await interaction.response.edit_message(embed=embed, view=view)
@@ -3523,26 +3556,26 @@ class EditMenuOptionModal(discord.ui.Modal):
     def __init__(self, option_key):
         self.option_key = option_key
         option_name = option_key.replace("_", " ").title()
-        super().__init__(title=f"Edit {option_name}")
+        super().__init__(title=f"Edit | تعديل: {option_name}")
         
         menu_cfg = config["tickets"].get("menu_options", {}).get(option_key, {})
         
         self.label = discord.ui.TextInput(
-            label="Label",
+            label="Label | الاسم",
             default=menu_cfg.get("label", ""),
             required=False
         )
         self.add_item(self.label)
         
         self.emoji = discord.ui.TextInput(
-            label="Emoji",
+            label="Emoji | ايموجي",
             default=menu_cfg.get("emoji", ""),
             required=False
         )
         self.add_item(self.emoji)
         
         self.description = discord.ui.TextInput(
-            label="Description",
+            label="Description | الوصف",
             default=menu_cfg.get("description", ""),
             required=False
         )
