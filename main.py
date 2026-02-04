@@ -4395,6 +4395,34 @@ async def autoclear_setinterval(interaction: discord.Interaction, seconds: int):
         await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 
+@bot.tree.command(name="autoclear_fast", description="AutoClear: fast send | إرسال الرسالة بسرعة")
+@app_commands.describe(enabled="Send message early (recommended) | إرسال سريع")
+async def autoclear_fast(interaction: discord.Interaction, enabled: bool):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ Manage Messages required | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="clear"):
+            return await interaction.response.send_message(
+                "❌ Not allowed | غير مسموح لك",
+                ephemeral=True,
+            )
+
+        acfg = get_autoclear_config(interaction.guild_id)
+        acfg["send_early"] = bool(enabled)
+        update_guild_config(interaction.guild_id, {"auto_clear": acfg})
+        await interaction.response.send_message(
+            ("⚡ Fast mode enabled | تم تفعيل الإرسال السريع" if enabled else "🐢 Fast mode disabled | تم إيقاف الإرسال السريع"),
+            ephemeral=True,
+        )
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+
 @bot.tree.command(name="autoclear_start", description="AutoClear: start | تشغيل الحذف التلقائي")
 async def autoclear_start(interaction: discord.Interaction):
     try:
