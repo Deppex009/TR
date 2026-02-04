@@ -4951,8 +4951,8 @@ async def embed_command(
             )
 
         embed = discord.Embed(
-            title=title or discord.Embed.Empty,
-            description=description or discord.Embed.Empty,
+            title=title or None,
+            description=description or None,
             color=parse_color(color or "#5865F2"),
             timestamp=discord.utils.utcnow(),
         )
