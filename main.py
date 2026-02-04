@@ -524,23 +524,21 @@ class AutoReplyAddModal(discord.ui.Modal):
         )
         self.add_item(self.mode)
 
-        self.mention = discord.ui.TextInput(
-            label="Mention user? yes/no",
-            placeholder="no",
+        # NOTE: Discord modals allow max 5 inputs.
+        # Put mention + case_sensitive in one field.
+        self.options = discord.ui.TextInput(
+            label="Options: mention=yes/no case=yes/no",
+            placeholder="mention=no case=no",
             required=False,
-            max_length=10,
+            max_length=60,
         )
-        self.add_item(self.mention)
-
-        self.case_sensitive = discord.ui.TextInput(
-            label="Case sensitive? yes/no",
-            placeholder="no",
-            required=False,
-            max_length=10,
-        )
-        self.add_item(self.case_sensitive)
+        self.add_item(self.options)
 
     async def on_submit(self, interaction: discord.Interaction):
+        opt = (self.options.value or "").strip().lower()
+        mention = _parse_bool_text("yes" if "mention=yes" in opt else "no" if "mention=no" in opt else None, False)
+        case_sensitive = _parse_bool_text("yes" if "case=yes" in opt else "no" if "case=no" in opt else None, False)
+
         items = get_auto_replies_config(interaction.guild_id)
         items.append(
             {
@@ -548,8 +546,8 @@ class AutoReplyAddModal(discord.ui.Modal):
                 "reply": self.reply.value.strip(),
                 "match": _normalize_match_type(self.match.value),
                 "mode": _normalize_reply_mode(self.mode.value),
-                "mention": _parse_bool_text(self.mention.value, False),
-                "case_sensitive": _parse_bool_text(self.case_sensitive.value, False),
+                "mention": mention,
+                "case_sensitive": case_sensitive,
                 "enabled": True,
             }
         )
