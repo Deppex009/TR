@@ -503,7 +503,7 @@ def _build_autoreply_panel_embed(guild: discord.Guild, items: list[dict], *, pag
         color=discord.Color.blurple(),
     )
     if not items:
-        embed.add_field(name="No auto replies | لا يوجد", value="Use **Add** to create one.", inline=False)
+        embed.add_field(name="No auto replies | لا يوجد", value="Use **Add** to create one | استخدم **إضافة**", inline=False)
         return embed
 
     total = len(items)
@@ -532,7 +532,7 @@ def _build_autoreply_panel_embed(guild: discord.Guild, items: list[dict], *, pag
         lines.append(f"`{idx+1}` {enabled} `[{match_type} | {mode} | {mention} | {case} | R:{role_tag}]`\n**{trig}** → {rep}")
 
     embed.add_field(
-        name=f"Rules ({start+1}-{end} / {total})",
+        name=f"Rules | القواعد ({start+1}-{end} / {total})",
         value="\n\n".join(lines),
         inline=False,
     )
@@ -546,16 +546,16 @@ class AutoReplyAddModal(discord.ui.Modal):
         self.guild_id = int(guild_id)
 
         self.trigger = discord.ui.TextInput(
-            label="Trigger (word/sentence)",
-            placeholder="hi",
+            label="Trigger | كلمة",
+            placeholder="hi / مرحبا",
             required=True,
             max_length=200,
         )
         self.add_item(self.trigger)
 
         self.reply = discord.ui.TextInput(
-            label="Reply text",
-            placeholder="welcome!",
+            label="Reply | رد",
+            placeholder="welcome! / اهلاً",
             style=discord.TextStyle.paragraph,
             required=True,
             max_length=1500,
@@ -563,16 +563,16 @@ class AutoReplyAddModal(discord.ui.Modal):
         self.add_item(self.reply)
 
         self.match = discord.ui.TextInput(
-            label="Match: contains/exact/startswith/endswith",
-            placeholder="contains",
+            label="Match | مطابقة",
+            placeholder="contains / exact / startswith / endswith",
             required=False,
             max_length=20,
         )
         self.add_item(self.match)
 
         self.mode = discord.ui.TextInput(
-            label="Mode: send/reply",
-            placeholder="send",
+            label="Mode | وضع",
+            placeholder="send / reply",
             required=False,
             max_length=10,
         )
@@ -581,7 +581,7 @@ class AutoReplyAddModal(discord.ui.Modal):
         # NOTE: Discord modals allow max 5 inputs.
         # Put mention + case_sensitive + roles in one field.
         self.options = discord.ui.TextInput(
-            label="Options (mention/case/roles)",
+            label="Options | خيارات",
             placeholder="mention=no case=no roles=all",
             required=False,
             max_length=60,
@@ -614,7 +614,7 @@ class AutoReplyAddModal(discord.ui.Modal):
             }
         )
         update_guild_config(interaction.guild_id, {"auto_replies": items})
-        await interaction.response.send_message("✅ Auto reply added.", ephemeral=True)
+        await interaction.response.send_message("✅ Auto reply added | تم إضافة الرد", ephemeral=True)
 
 
 class AutoReplyEditModal(discord.ui.Modal):
@@ -623,7 +623,7 @@ class AutoReplyEditModal(discord.ui.Modal):
         self.guild_id = int(guild_id)
 
         self.index = discord.ui.TextInput(
-            label="Rule number",
+            label="Rule # | رقم",
             placeholder="1",
             required=True,
             max_length=5,
@@ -631,16 +631,16 @@ class AutoReplyEditModal(discord.ui.Modal):
         self.add_item(self.index)
 
         self.trigger = discord.ui.TextInput(
-            label="Trigger (leave blank = keep)",
-            placeholder="hello",
+            label="Trigger | كلمة",
+            placeholder="(blank = keep) / (اتركه فارغ)",
             required=False,
             max_length=200,
         )
         self.add_item(self.trigger)
 
         self.reply = discord.ui.TextInput(
-            label="Reply text (leave blank = keep)",
-            placeholder="welcome!",
+            label="Reply | رد",
+            placeholder="(blank = keep) / (اتركه فارغ)",
             style=discord.TextStyle.paragraph,
             required=False,
             max_length=1500,
@@ -648,7 +648,7 @@ class AutoReplyEditModal(discord.ui.Modal):
         self.add_item(self.reply)
 
         self.options = discord.ui.TextInput(
-            label="Options (match/mode/mention/case/roles)",
+            label="Options | خيارات",
             placeholder="match=contains mode=send mention=no case=no roles=all",
             required=False,
             max_length=120,
@@ -706,11 +706,11 @@ class AutoReplyEditModal(discord.ui.Modal):
 
             items[i] = rule
             update_guild_config(interaction.guild_id, {"auto_replies": items})
-            await interaction.response.send_message(f"✅ Updated rule {idx}.", ephemeral=True)
+            await interaction.response.send_message(f"✅ Updated rule {idx} | تم التعديل", ephemeral=True)
         except Exception as e:
             logger.error(f"AutoReplyEditModal error: {e}")
             try:
-                await interaction.response.send_message("❌ Error while editing rule.", ephemeral=True)
+                await interaction.response.send_message("❌ Error while editing | خطأ أثناء التعديل", ephemeral=True)
             except Exception:
                 pass
 
@@ -720,8 +720,8 @@ class AutoReplyTestModal(discord.ui.Modal):
         super().__init__(title="Test Auto Reply | اختبار")
         self.guild_id = int(guild_id)
         self.text = discord.ui.TextInput(
-            label="Message text to test",
-            placeholder="type something...",
+            label="Test text | نص",
+            placeholder="type... / اكتب...",
             style=discord.TextStyle.paragraph,
             required=True,
             max_length=1500,
@@ -756,31 +756,35 @@ class AutoReplyTestModal(discord.ui.Modal):
                     mode = _normalize_reply_mode(rule.get("mode"))
                     preview = f"{interaction.user.mention} {reply}" if mention else reply
                     embed = discord.Embed(
-                        title="✅ Match Found",
-                        description=f"Rule: `{idx}`\nOptions: `{rule.get('match','contains')}` / `{mode}` / mention={mention}",
+                        title="✅ Match Found | تم العثور",
+                        description=f"Rule | رقم: `{idx}`\nOptions | خيارات: `{rule.get('match','contains')}` / `{mode}` / mention={mention}",
                         color=discord.Color.green(),
                     )
-                    embed.add_field(name="Trigger", value=trigger[:1024], inline=False)
-                    embed.add_field(name="Bot would send", value=preview[:1024], inline=False)
+                    embed.add_field(name="Trigger | كلمة", value=trigger[:1024], inline=False)
+                    embed.add_field(name="Bot would send | سيرسل", value=preview[:1024], inline=False)
                     return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            await interaction.response.send_message("❌ No rule matched that text.", ephemeral=True)
+            await interaction.response.send_message("❌ No match | لا يوجد تطابق", ephemeral=True)
         except Exception as e:
             logger.error(f"AutoReplyTestModal error: {e}")
             try:
-                await interaction.response.send_message("❌ Error while testing rules.", ephemeral=True)
+                await interaction.response.send_message("❌ Error while testing | خطأ أثناء الاختبار", ephemeral=True)
             except Exception:
                 pass
 
 
 class AutoReplyIndexModal(discord.ui.Modal):
     def __init__(self, guild_id: int, mode: str):
-        super().__init__(title=f"Auto Reply: {mode.title()}")
+        title_map = {
+            "remove": "Remove | حذف",
+            "toggle": "Toggle | تفعيل",
+        }
+        super().__init__(title=f"Auto Reply | رد: {title_map.get(mode, mode.title())}")
         self.guild_id = int(guild_id)
         self.mode = mode
 
         self.index = discord.ui.TextInput(
-            label="Rule number (from panel)",
+            label="Rule # | رقم",
             placeholder="1",
             required=True,
             max_length=5,
@@ -792,33 +796,33 @@ class AutoReplyIndexModal(discord.ui.Modal):
         try:
             idx = int(self.index.value)
         except Exception:
-            return await interaction.response.send_message("❌ Invalid number.", ephemeral=True)
+            return await interaction.response.send_message("❌ Invalid number | رقم خطأ", ephemeral=True)
 
         if idx < 1 or idx > len(items):
-            return await interaction.response.send_message("❌ Out of range.", ephemeral=True)
+            return await interaction.response.send_message("❌ Out of range | خارج النطاق", ephemeral=True)
 
         i = idx - 1
         if self.mode == "remove":
             removed = items.pop(i)
             update_guild_config(interaction.guild_id, {"auto_replies": items})
-            return await interaction.response.send_message(f"✅ Removed: {removed.get('trigger')}", ephemeral=True)
+            return await interaction.response.send_message(f"✅ Removed | تم الحذف: {removed.get('trigger')}", ephemeral=True)
 
         if self.mode == "toggle":
             items[i]["enabled"] = not items[i].get("enabled", True)
             update_guild_config(interaction.guild_id, {"auto_replies": items})
             state = "enabled" if items[i]["enabled"] else "disabled"
-            return await interaction.response.send_message(f"✅ Toggled rule {idx} ({state}).", ephemeral=True)
+            return await interaction.response.send_message(f"✅ Toggled | تم التفعيل {idx} ({state})", ephemeral=True)
 
-        await interaction.response.send_message("❌ Unknown action.", ephemeral=True)
+        await interaction.response.send_message("❌ Unknown action | أمر غير معروف", ephemeral=True)
 
 
 class AutoReplyRolesModal(discord.ui.Modal):
     def __init__(self, guild_id: int):
-        super().__init__(title="Auto Reply Roles | رتب الرد")
+        super().__init__(title="Roles | الرتب")
         self.guild_id = int(guild_id)
 
         self.index = discord.ui.TextInput(
-            label="Rule number",
+            label="Rule # | رقم",
             placeholder="1",
             required=True,
             max_length=5,
@@ -826,7 +830,7 @@ class AutoReplyRolesModal(discord.ui.Modal):
         self.add_item(self.index)
 
         self.roles = discord.ui.TextInput(
-            label="Roles (IDs or mentions)",
+            label="Roles | رتب",
             placeholder="all  OR  123,456  OR  <@&123>,<@&456>",
             required=True,
             max_length=180,
@@ -838,10 +842,10 @@ class AutoReplyRolesModal(discord.ui.Modal):
         try:
             idx = int(self.index.value.strip())
         except Exception:
-            return await interaction.response.send_message("❌ Invalid number.", ephemeral=True)
+            return await interaction.response.send_message("❌ Invalid number | رقم خطأ", ephemeral=True)
 
         if idx < 1 or idx > len(items):
-            return await interaction.response.send_message("❌ Out of range.", ephemeral=True)
+            return await interaction.response.send_message("❌ Out of range | خارج النطاق", ephemeral=True)
 
         value = (self.roles.value or "").strip()
         rule = items[idx - 1] or {}
@@ -856,7 +860,7 @@ class AutoReplyRolesModal(discord.ui.Modal):
         items[idx - 1] = rule
         update_guild_config(interaction.guild_id, {"auto_replies": items})
         role_tag = "all" if not rule.get("allowed_role_ids") else str(len(rule.get("allowed_role_ids")))
-        await interaction.response.send_message(f"✅ Updated roles for rule {idx} (R:{role_tag}).", ephemeral=True)
+        await interaction.response.send_message(f"✅ Roles updated | تم تحديث الرتب ({idx}) (R:{role_tag})", ephemeral=True)
 
 
 class AutoReplyPanelView(discord.ui.View):
@@ -871,55 +875,55 @@ class AutoReplyPanelView(discord.ui.View):
         embed = _build_autoreply_panel_embed(interaction.guild, items, page=self.page)
         await interaction.response.edit_message(embed=embed, view=self)
 
-    @discord.ui.button(label="Add", style=discord.ButtonStyle.success, row=0)
+    @discord.ui.button(label="Add | إضافة", style=discord.ButtonStyle.success, row=0)
     async def add_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(AutoReplyAddModal(self.guild_id))
 
-    @discord.ui.button(label="Edit", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Edit | تعديل", style=discord.ButtonStyle.primary, row=0)
     async def edit_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(AutoReplyEditModal(self.guild_id))
 
-    @discord.ui.button(label="Roles", style=discord.ButtonStyle.secondary, row=0)
+    @discord.ui.button(label="Roles | رتب", style=discord.ButtonStyle.secondary, row=0)
     async def roles_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(AutoReplyRolesModal(self.guild_id))
 
-    @discord.ui.button(label="Remove", style=discord.ButtonStyle.danger, row=0)
+    @discord.ui.button(label="Remove | حذف", style=discord.ButtonStyle.danger, row=0)
     async def remove_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(AutoReplyIndexModal(self.guild_id, "remove"))
 
-    @discord.ui.button(label="Toggle", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Toggle | تفعيل", style=discord.ButtonStyle.primary, row=0)
     async def toggle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(AutoReplyIndexModal(self.guild_id, "toggle"))
 
-    @discord.ui.button(label="Test", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Test | تجربة", style=discord.ButtonStyle.secondary, row=1)
     async def test_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
-            return await interaction.response.send_message("❌ Manage Server required", ephemeral=True)
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(AutoReplyTestModal(self.guild_id))
 
-    @discord.ui.button(label="Prev", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Prev | السابق", style=discord.ButtonStyle.secondary, row=1)
     async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.page = max(0, self.page - 1)
         await self._refresh(interaction)
 
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Next | التالي", style=discord.ButtonStyle.secondary, row=1)
     async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         items = get_auto_replies_config(interaction.guild_id)
         total_pages = max(1, (len(items) + 8 - 1) // 8)
         self.page = min(total_pages - 1, self.page + 1)
         await self._refresh(interaction)
 
-    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="Refresh | تحديث", style=discord.ButtonStyle.secondary, row=1)
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._refresh(interaction)
 
