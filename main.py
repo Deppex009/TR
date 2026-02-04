@@ -586,7 +586,7 @@ class AutoReplyEditModal(discord.ui.Modal):
         self.add_item(self.reply)
 
         self.options = discord.ui.TextInput(
-            label="Options (optional): match=contains mode=send mention=yes case=no",
+            label="Options (match/mode/mention/case)",
             placeholder="match=contains mode=send mention=no case=no",
             required=False,
             max_length=120,
