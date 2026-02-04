@@ -1357,6 +1357,15 @@ async def on_ready():
         await bot.tree.sync()
         activity = discord.Activity(type=discord.ActivityType.playing, name="By Dep-A7")
         await bot.change_presence(activity=activity)
+
+        # Restart enabled auto-clear workers after reboot
+        for g in bot.guilds:
+            try:
+                if get_autoclear_config(g.id).get("enabled"):
+                    _autoclear_start_task(g.id)
+            except Exception:
+                pass
+
         logger.info(f"✅ Bot ready! Logged in as {bot.user}")
     except Exception as e:
         logger.error(f"Ready event error: {e}")
@@ -4107,6 +4116,398 @@ async def _purge_channel_all(channel: discord.TextChannel, *, reason: str | None
         # small delay to be kind to rate limits
         await asyncio.sleep(1)
     return total_deleted
+
+
+# ============================================================
+# AUTO CLEAR (delete channel + send message)
+# ============================================================
+
+def get_autoclear_config(guild_id: int) -> dict:
+    """Get auto-clear config for a guild and ensure defaults exist."""
+    guild_cfg = get_guild_config(guild_id)
+    changed = False
+
+    if "auto_clear" not in guild_cfg or not isinstance(guild_cfg.get("auto_clear"), dict):
+        guild_cfg["auto_clear"] = {}
+        changed = True
+
+    acfg = guild_cfg["auto_clear"]
+
+    def _set_default(key: str, value):
+        nonlocal changed
+        if key not in acfg:
+            acfg[key] = value
+            changed = True
+
+    _set_default("enabled", False)
+    _set_default("channel_id", None)
+    _set_default("message", "✅ Cleared | ✅ تم الحذف")
+    _set_default("interval_seconds", 60)
+    # If there are old 14d+ messages, deletion can take time.
+    # When send_early=True we send the message right after bulk-deleting newer messages,
+    # then continue deleting older messages using history(before=sent_message) so it won't be deleted.
+    _set_default("send_early", True)
+
+    if changed:
+        update_guild_config(guild_id, guild_cfg)
+
+    return acfg
+
+
+_autoclear_tasks: dict[int, asyncio.Task] = {}
+_autoclear_locks: dict[int, asyncio.Lock] = {}
+
+
+def _autoclear_lock(guild_id: int) -> asyncio.Lock:
+    lock = _autoclear_locks.get(int(guild_id))
+    if lock is None:
+        lock = asyncio.Lock()
+        _autoclear_locks[int(guild_id)] = lock
+    return lock
+
+
+async def _autoclear_delete_all_then_send(
+    channel: discord.TextChannel,
+    message_to_send: str,
+    *,
+    send_early: bool,
+) -> tuple[int, bool]:
+    deleted_total = 0
+    sent_message: discord.Message | None = None
+    before_cursor: discord.Message | None = None
+
+    while True:
+        history_kwargs = {"limit": 100}
+        if before_cursor is not None:
+            history_kwargs["before"] = before_cursor
+
+        messages = [m async for m in channel.history(**history_kwargs)]
+        if not messages:
+            break
+
+        now = discord.utils.utcnow()
+        can_delete: list[discord.Message] = []
+        too_old: list[discord.Message] = []
+        for m in messages:
+            if sent_message is not None and m.id == sent_message.id:
+                continue
+
+            age_seconds = (now - m.created_at).total_seconds()
+            if age_seconds >= 14 * 24 * 3600:
+                too_old.append(m)
+            else:
+                can_delete.append(m)
+
+        # Fast path: bulk delete for messages <14 days
+        if can_delete:
+            try:
+                await channel.delete_messages(can_delete)
+                deleted_total += len(can_delete)
+            except discord.HTTPException:
+                for m in can_delete:
+                    try:
+                        await m.delete()
+                        deleted_total += 1
+                        await asyncio.sleep(0.2)
+                    except Exception:
+                        pass
+
+        # If we reached the "old messages" zone, send immediately (so it feels instant)
+        if send_early and sent_message is None and message_to_send and not can_delete:
+            try:
+                sent_message = await channel.send(str(message_to_send))
+                before_cursor = sent_message
+            except Exception:
+                sent_message = None
+
+        # Old 14d+ messages must be deleted one-by-one (Discord limitation)
+        for m in too_old:
+            try:
+                await m.delete()
+                deleted_total += 1
+                await asyncio.sleep(0.2)
+            except Exception:
+                pass
+
+        await asyncio.sleep(0.4)
+
+    if message_to_send and sent_message is None:
+        try:
+            sent_message = await channel.send(str(message_to_send))
+        except Exception:
+            sent_message = None
+
+    return deleted_total, bool(sent_message)
+
+
+async def _autoclear_run_once(guild_id: int) -> str:
+    acfg = get_autoclear_config(guild_id)
+
+    channel_id = acfg.get("channel_id")
+    if not channel_id:
+        return "❌ Set channel first | لازم تحدد الروم أولاً: /autoclear_setchannel"
+
+    channel = bot.get_channel(int(channel_id))
+    if not isinstance(channel, discord.TextChannel):
+        return "❌ Channel not found | الروم غير موجودة أو البوت ما عنده صلاحية"
+
+    message_to_send = str(acfg.get("message") or "").strip()
+    interval = int(acfg.get("interval_seconds") or 60)
+    send_early = bool(acfg.get("send_early", True))
+
+    lock = _autoclear_lock(guild_id)
+    if lock.locked():
+        return "⏳ Already running | العملية شغالة حالياً"
+
+    async with lock:
+        deleted_count, sent = await _autoclear_delete_all_then_send(
+            channel,
+            message_to_send,
+            send_early=send_early,
+        )
+
+    sent_txt = "✅ Sent | ✅ تم الإرسال" if sent else "⚠️ Not sent | لم يتم الإرسال"
+    return f"✅ Cleared {deleted_count} | تم حذف {deleted_count} رسالة • {sent_txt} • every {interval}s | كل {interval} ثانية"
+
+
+async def _autoclear_worker(guild_id: int):
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        acfg = get_autoclear_config(guild_id)
+        if not acfg.get("enabled"):
+            break
+
+        interval = int(acfg.get("interval_seconds") or 60)
+        interval = max(20, min(interval, 24 * 3600))
+
+        start_time = asyncio.get_event_loop().time()
+        try:
+            result = await _autoclear_run_once(guild_id)
+            logger.info(f"[AutoClear:{guild_id}] {result}")
+        except Exception as e:
+            logger.error(f"[AutoClear:{guild_id}] error: {e}")
+
+        elapsed = asyncio.get_event_loop().time() - start_time
+        await asyncio.sleep(max(0, interval - elapsed))
+
+
+def _autoclear_start_task(guild_id: int):
+    existing = _autoclear_tasks.get(int(guild_id))
+    if existing and not existing.done():
+        return
+    _autoclear_tasks[int(guild_id)] = asyncio.create_task(_autoclear_worker(int(guild_id)))
+
+
+def _autoclear_stop_task(guild_id: int):
+    task = _autoclear_tasks.pop(int(guild_id), None)
+    if task and not task.done():
+        task.cancel()
+
+
+@bot.tree.command(name="autoclear_setchannel", description="AutoClear: set channel | تحديد روم الحذف")
+@app_commands.describe(channel="Channel to clear | الروم")
+async def autoclear_setchannel(interaction: discord.Interaction, channel: discord.TextChannel):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ Manage Messages required | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="clear"):
+            return await interaction.response.send_message(
+                "❌ Not allowed | غير مسموح لك",
+                ephemeral=True,
+            )
+
+        acfg = get_autoclear_config(interaction.guild_id)
+        acfg["channel_id"] = channel.id
+        update_guild_config(interaction.guild_id, {"auto_clear": acfg})
+        await interaction.response.send_message(
+            f"✅ Channel set | تم تحديد الروم: {channel.mention}",
+            ephemeral=True,
+        )
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="autoclear_setmsg", description="AutoClear: set message | تغيير رسالة الإرسال")
+@app_commands.describe(message="Message after clear | الرسالة بعد الحذف")
+async def autoclear_setmsg(interaction: discord.Interaction, message: str):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ Manage Messages required | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="clear"):
+            return await interaction.response.send_message(
+                "❌ Not allowed | غير مسموح لك",
+                ephemeral=True,
+            )
+
+        acfg = get_autoclear_config(interaction.guild_id)
+        acfg["message"] = str(message)
+        update_guild_config(interaction.guild_id, {"auto_clear": acfg})
+        await interaction.response.send_message(
+            "✅ Message updated | تم تحديث الرسالة",
+            ephemeral=True,
+        )
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="autoclear_setinterval", description="AutoClear: set interval | تغيير مدة التكرار")
+@app_commands.describe(seconds="Repeat every N seconds (min 20) | كل كم ثانية")
+async def autoclear_setinterval(interaction: discord.Interaction, seconds: int):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ Manage Messages required | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="clear"):
+            return await interaction.response.send_message(
+                "❌ Not allowed | غير مسموح لك",
+                ephemeral=True,
+            )
+
+        seconds = int(seconds)
+        if seconds < 20 or seconds > 24 * 3600:
+            return await interaction.response.send_message(
+                "❌ Interval 20-86400 | المدة بين 20 و 86400 ثانية",
+                ephemeral=True,
+            )
+
+        acfg = get_autoclear_config(interaction.guild_id)
+        acfg["interval_seconds"] = seconds
+        update_guild_config(interaction.guild_id, {"auto_clear": acfg})
+        await interaction.response.send_message(
+            f"✅ Interval set | تم تحديد المدة: {seconds}s",
+            ephemeral=True,
+        )
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="autoclear_start", description="AutoClear: start | تشغيل الحذف التلقائي")
+async def autoclear_start(interaction: discord.Interaction):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ Manage Messages required | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="clear"):
+            return await interaction.response.send_message(
+                "❌ Not allowed | غير مسموح لك",
+                ephemeral=True,
+            )
+
+        acfg = get_autoclear_config(interaction.guild_id)
+        if not acfg.get("channel_id"):
+            return await interaction.response.send_message(
+                "❌ Set channel first | لازم تحدد الروم أولاً: /autoclear_setchannel",
+                ephemeral=True,
+            )
+
+        acfg["enabled"] = True
+        update_guild_config(interaction.guild_id, {"auto_clear": acfg})
+
+        await interaction.response.defer(ephemeral=True)
+        # Run once immediately, then loop
+        result = await _autoclear_run_once(interaction.guild_id)
+        _autoclear_start_task(interaction.guild_id)
+
+        await interaction.followup.send(
+            "🚀 Started | تم التشغيل\n" + result,
+            ephemeral=True,
+        )
+    except Exception as e:
+        try:
+            await interaction.followup.send(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+        except Exception:
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="autoclear_stop", description="AutoClear: stop | إيقاف الحذف التلقائي")
+async def autoclear_stop(interaction: discord.Interaction):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ Manage Messages required | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="clear"):
+            return await interaction.response.send_message(
+                "❌ Not allowed | غير مسموح لك",
+                ephemeral=True,
+            )
+
+        acfg = get_autoclear_config(interaction.guild_id)
+        acfg["enabled"] = False
+        update_guild_config(interaction.guild_id, {"auto_clear": acfg})
+        _autoclear_stop_task(interaction.guild_id)
+        await interaction.response.send_message("⛔ Stopped | تم الإيقاف", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="autoclear_status", description="AutoClear: status | حالة الحذف التلقائي")
+async def autoclear_status(interaction: discord.Interaction):
+    try:
+        acfg = get_autoclear_config(interaction.guild_id)
+        ch = f"<#{acfg.get('channel_id')}>" if acfg.get("channel_id") else "❌ Not set | غير محددة"
+        enabled = "✅ ON | شغال" if acfg.get("enabled") else "⛔ OFF | متوقف"
+        interval = int(acfg.get("interval_seconds") or 60)
+        send_early = "✅" if acfg.get("send_early", True) else "❌"
+        msg = str(acfg.get("message") or "").strip() or "(empty)"
+
+        await interaction.response.send_message(
+            f"📌 Status | الحالة: {enabled}\n"
+            f"📍 Channel | الروم: {ch}\n"
+            f"⏱️ Interval | المدة: {interval}s\n"
+            f"⚡ Send early | إرسال سريع: {send_early}\n"
+            f"📝 Message | الرسالة: {msg}",
+            ephemeral=True,
+        )
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="autoclear_now", description="AutoClear: run once | حذف الآن مرة واحدة")
+async def autoclear_now(interaction: discord.Interaction):
+    try:
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                "❌ Manage Messages required | تحتاج صلاحية إدارة الرسائل",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="clear"):
+            return await interaction.response.send_message(
+                "❌ Not allowed | غير مسموح لك",
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(ephemeral=True)
+        result = await _autoclear_run_once(interaction.guild_id)
+        await interaction.followup.send(result, ephemeral=True)
+    except Exception as e:
+        try:
+            await interaction.followup.send(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+        except Exception:
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
 # Shortcut command handler
 @bot.event
