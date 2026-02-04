@@ -4693,7 +4693,7 @@ class ClearSettingsModal(discord.ui.Modal):
         super().__init__(title="🧹 Clear Settings | إعدادات المسح")
 
         self.shortcut = discord.ui.TextInput(
-            label="Shortcut (optional) | اختصار (اختياري)",
+            label="Shortcut | اختصار (اختياري)",
             placeholder="m",
             style=discord.TextStyle.short,
             required=False,
@@ -4702,7 +4702,7 @@ class ClearSettingsModal(discord.ui.Modal):
         self.add_item(self.shortcut)
 
         self.default_amount = discord.ui.TextInput(
-            label="Default number (if not a number) | الرقم الافتراضي",
+            label="Default number | رقم افتراضي",
             placeholder="5",
             style=discord.TextStyle.short,
             required=False,
