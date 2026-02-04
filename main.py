@@ -4208,12 +4208,13 @@ async def _autoclear_delete_all_then_send(
                     try:
                         await m.delete()
                         deleted_total += 1
-                        await asyncio.sleep(0.2)
+                        await asyncio.sleep(0.15)
                     except Exception:
                         pass
 
         # If we reached the "old messages" zone, send immediately (so it feels instant)
-        if send_early and sent_message is None and message_to_send and not can_delete:
+        # Do this as soon as we detect old messages (even if we also deleted newer messages in this batch).
+        if send_early and sent_message is None and message_to_send and too_old:
             try:
                 sent_message = await channel.send(str(message_to_send))
                 before_cursor = sent_message
@@ -4225,11 +4226,11 @@ async def _autoclear_delete_all_then_send(
             try:
                 await m.delete()
                 deleted_total += 1
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.15)
             except Exception:
                 pass
 
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(0.25)
 
     if message_to_send and sent_message is None:
         try:
