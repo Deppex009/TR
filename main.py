@@ -594,45 +594,52 @@ class AutoReplyEditModal(discord.ui.Modal):
         self.add_item(self.options)
 
     async def on_submit(self, interaction: discord.Interaction):
-        items = get_auto_replies_config(interaction.guild_id)
         try:
-            idx = int(self.index.value.strip())
-        except Exception:
-            return await interaction.response.send_message("❌ Invalid number.", ephemeral=True)
+            items = get_auto_replies_config(interaction.guild_id)
+            try:
+                idx = int(self.index.value.strip())
+            except Exception:
+                return await interaction.response.send_message("❌ Invalid number.", ephemeral=True)
 
-        if idx < 1 or idx > len(items):
-            return await interaction.response.send_message("❌ Out of range.", ephemeral=True)
+            if idx < 1 or idx > len(items):
+                return await interaction.response.send_message("❌ Out of range.", ephemeral=True)
 
-        i = idx - 1
-        rule = items[i] or {}
+            i = idx - 1
+            rule = items[i] or {}
 
-        if self.trigger.value and self.trigger.value.strip():
-            rule["trigger"] = self.trigger.value.strip()
-        if self.reply.value and self.reply.value.strip():
-            rule["reply"] = self.reply.value.strip()
+            if self.trigger.value and self.trigger.value.strip():
+                rule["trigger"] = self.trigger.value.strip()
+            if self.reply.value and self.reply.value.strip():
+                rule["reply"] = self.reply.value.strip()
 
-        opt = (self.options.value or "").strip()
-        if opt:
-            # very small parser: key=value pairs
-            pairs = re.findall(r"(match|mode|mention|case)\s*=\s*([^\s]+)", opt, flags=re.IGNORECASE)
-            kv = {k.lower(): v for k, v in pairs}
-            if "match" in kv:
-                rule["match"] = _normalize_match_type(kv.get("match"))
-            if "mode" in kv:
-                rule["mode"] = _normalize_reply_mode(kv.get("mode"))
-            if "mention" in kv:
-                rule["mention"] = _parse_bool_text(kv.get("mention"), bool(rule.get("mention", False)))
-            if "case" in kv:
-                rule["case_sensitive"] = _parse_bool_text(kv.get("case"), bool(rule.get("case_sensitive", False)))
+            opt = (self.options.value or "").strip()
+            if opt:
+                # very small parser: key=value pairs
+                pairs = re.findall(r"(match|mode|mention|case)\s*=\s*([^\s]+)", opt, flags=re.IGNORECASE)
+                kv = {k.lower(): v for k, v in pairs}
+                if "match" in kv:
+                    rule["match"] = _normalize_match_type(kv.get("match"))
+                if "mode" in kv:
+                    rule["mode"] = _normalize_reply_mode(kv.get("mode"))
+                if "mention" in kv:
+                    rule["mention"] = _parse_bool_text(kv.get("mention"), bool(rule.get("mention", False)))
+                if "case" in kv:
+                    rule["case_sensitive"] = _parse_bool_text(kv.get("case"), bool(rule.get("case_sensitive", False)))
 
-        # Ensure defaults exist
-        rule["match"] = _normalize_match_type(rule.get("match"))
-        rule["mode"] = _normalize_reply_mode(rule.get("mode"))
-        rule["enabled"] = bool(rule.get("enabled", True))
+            # Ensure defaults exist
+            rule["match"] = _normalize_match_type(rule.get("match"))
+            rule["mode"] = _normalize_reply_mode(rule.get("mode"))
+            rule["enabled"] = bool(rule.get("enabled", True))
 
-        items[i] = rule
-        update_guild_config(interaction.guild_id, {"auto_replies": items})
-        await interaction.response.send_message(f"✅ Updated rule {idx}.", ephemeral=True)
+            items[i] = rule
+            update_guild_config(interaction.guild_id, {"auto_replies": items})
+            await interaction.response.send_message(f"✅ Updated rule {idx}.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"AutoReplyEditModal error: {e}")
+            try:
+                await interaction.response.send_message("❌ Error while editing rule.", ephemeral=True)
+            except Exception:
+                pass
 
 
 class AutoReplyTestModal(discord.ui.Modal):
@@ -649,36 +656,43 @@ class AutoReplyTestModal(discord.ui.Modal):
         self.add_item(self.text)
 
     async def on_submit(self, interaction: discord.Interaction):
-        items = get_auto_replies_config(interaction.guild_id)
-        content = self.text.value
+        try:
+            items = get_auto_replies_config(interaction.guild_id)
+            content = self.text.value
 
-        for idx, rule in enumerate(items, start=1):
-            if not rule or not rule.get("enabled", True):
-                continue
-            trigger = str(rule.get("trigger", "")).strip()
-            reply = str(rule.get("reply", "")).strip()
-            if not trigger or not reply:
-                continue
+            for idx, rule in enumerate(items, start=1):
+                if not rule or not rule.get("enabled", True):
+                    continue
+                trigger = str(rule.get("trigger", "")).strip()
+                reply = str(rule.get("reply", "")).strip()
+                if not trigger or not reply:
+                    continue
 
-            if _matches_trigger(
-                content,
-                trigger,
-                match_type=_normalize_match_type(rule.get("match")),
-                case_sensitive=bool(rule.get("case_sensitive", False)),
-            ):
-                mention = bool(rule.get("mention", False))
-                mode = _normalize_reply_mode(rule.get("mode"))
-                preview = f"{interaction.user.mention} {reply}" if mention else reply
-                embed = discord.Embed(
-                    title="✅ Match Found",
-                    description=f"Rule: `{idx}`\nOptions: `{rule.get('match','contains')}` / `{mode}` / mention={mention}",
-                    color=discord.Color.green(),
-                )
-                embed.add_field(name="Trigger", value=trigger[:1024], inline=False)
-                embed.add_field(name="Bot would send", value=preview[:1024], inline=False)
-                return await interaction.response.send_message(embed=embed, ephemeral=True)
+                if _matches_trigger(
+                    content,
+                    trigger,
+                    match_type=_normalize_match_type(rule.get("match")),
+                    case_sensitive=bool(rule.get("case_sensitive", False)),
+                ):
+                    mention = bool(rule.get("mention", False))
+                    mode = _normalize_reply_mode(rule.get("mode"))
+                    preview = f"{interaction.user.mention} {reply}" if mention else reply
+                    embed = discord.Embed(
+                        title="✅ Match Found",
+                        description=f"Rule: `{idx}`\nOptions: `{rule.get('match','contains')}` / `{mode}` / mention={mention}",
+                        color=discord.Color.green(),
+                    )
+                    embed.add_field(name="Trigger", value=trigger[:1024], inline=False)
+                    embed.add_field(name="Bot would send", value=preview[:1024], inline=False)
+                    return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        await interaction.response.send_message("❌ No rule matched that text.", ephemeral=True)
+            await interaction.response.send_message("❌ No rule matched that text.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"AutoReplyTestModal error: {e}")
+            try:
+                await interaction.response.send_message("❌ Error while testing rules.", ephemeral=True)
+            except Exception:
+                pass
 
 
 class AutoReplyIndexModal(discord.ui.Modal):
@@ -722,7 +736,8 @@ class AutoReplyIndexModal(discord.ui.Modal):
 
 class AutoReplyPanelView(discord.ui.View):
     def __init__(self, guild_id: int):
-        super().__init__(timeout=300)
+        # Longer timeout to avoid 'Interaction failed' from expired panels.
+        super().__init__(timeout=3600)
         self.guild_id = int(guild_id)
         self.page = 0
 
