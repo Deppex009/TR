@@ -1128,232 +1128,636 @@ class ChannelAutoPanelView(discord.ui.View):
 
 # Giveaway helpers
 GIVEAWAY_DURATION_REGEX = re.compile(r"^(\d+)(s|m|h|d|w)$", re.IGNORECASE)
-active_giveaways = {}
+_giveaway_watcher_task: asyncio.Task | None = None
 
-def parse_duration(duration_str):
+
+def _parse_giveaway_duration_seconds(duration_str: str | None) -> int | None:
     if not duration_str:
         return None
-    duration_str = duration_str.strip().lower()
+    duration_str = str(duration_str).strip().lower()
     match = GIVEAWAY_DURATION_REGEX.match(duration_str)
     if match:
         amount = int(match.group(1))
-        unit = match.group(2)
+        unit = match.group(2).lower()
         multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
         return amount * multipliers[unit]
     if duration_str.isdigit():
         return int(duration_str) * 60
     return None
 
-def build_giveaway_embed(prize, host, end_ts, winners_count, entries_count, color, emoji, image_url=None, ended=False):
-    status_title = "🎉 Giveaway Ended" if ended else "🎉 Giveaway"
+
+def get_giveaway_config(guild_id: int) -> dict:
+    guild_cfg = get_guild_config(guild_id)
+    gw = guild_cfg.get("giveaway")
+    if not isinstance(gw, dict):
+        gw = {}
+
+    changed = False
+    defaults = {
+        "channel_id": None,
+        "host_role_ids": [],
+        "reaction_emoji": "🎉",
+        "embed_color": gw.get("color") if isinstance(gw.get("color"), str) else "#5865F2",
+        "image_url": gw.get("image_url") if isinstance(gw.get("image_url"), str) else "",
+        "title_template": "🎁 {guild} Giveaways | سحوبات {guild}",
+        "react_line_template": "✨ React With {reaction} To Enter | تفاعل بـ {reaction} للدخول",
+        "prize_line_template": "🎁 Prize : {prize} | الجائزة : {prize}",
+        "host_line_template": "👑 Hosted By : {host} | المستضيف : {host}",
+        "end_line_template": "Winner(s): {winners} • Ends: {ends_at} | الفائزون: {winners} • ينتهي: {ends_at}",
+        "ended_line_template": "Winner(s): {winners} • Ended: {ended_at} | الفائزون: {winners} • انتهى: {ended_at}",
+        "winners_line_template": "Winners: {winner_mentions} | الفائزون: {winner_mentions}",
+        "active": [],
+    }
+
+    for k, v in defaults.items():
+        if k not in gw:
+            gw[k] = v
+            changed = True
+
+    # Back-compat keys
+    if "emoji" in gw and "reaction_emoji" not in gw:
+        gw["reaction_emoji"] = gw.get("emoji")
+        changed = True
+    if "color" in gw and "embed_color" not in gw and isinstance(gw.get("color"), str):
+        gw["embed_color"] = gw.get("color")
+        changed = True
+
+    # Ensure types
+    if not isinstance(gw.get("host_role_ids"), list):
+        gw["host_role_ids"] = []
+        changed = True
+    if not isinstance(gw.get("active"), list):
+        gw["active"] = []
+        changed = True
+
+    if changed:
+        update_guild_config(guild_id, {"giveaway": gw})
+    return gw
+
+
+def _safe_format(template: str, **kwargs) -> str:
+    try:
+        return str(template).format(**kwargs)
+    except Exception:
+        return str(template)
+
+
+def build_giveaway_embed(
+    *,
+    guild: discord.Guild,
+    giveaway_cfg: dict,
+    prize: str,
+    host_mention: str,
+    end_ts: int,
+    winners_count: int,
+    ended: bool = False,
+    winner_mentions: str | None = None,
+) -> discord.Embed:
+    reaction = giveaway_cfg.get("reaction_emoji", "🎉")
+    title = _safe_format(giveaway_cfg.get("title_template"), guild=guild.name)
+
+    ends_at = f"<t:{int(end_ts)}:F> (<t:{int(end_ts)}:R>)"
+    ended_at = f"<t:{int(end_ts)}:F>"
+
+    react_line = _safe_format(giveaway_cfg.get("react_line_template"), reaction=reaction)
+    prize_line = _safe_format(giveaway_cfg.get("prize_line_template"), prize=prize)
+    host_line = _safe_format(giveaway_cfg.get("host_line_template"), host=host_mention)
+
+    if ended:
+        end_line = _safe_format(
+            giveaway_cfg.get("ended_line_template"),
+            winners=winners_count,
+            ended_at=ended_at,
+        )
+    else:
+        end_line = _safe_format(
+            giveaway_cfg.get("end_line_template"),
+            winners=winners_count,
+            ends_at=ends_at,
+        )
+
+    lines = [react_line, prize_line, host_line, "", end_line]
+    if ended:
+        winners_line = _safe_format(
+            giveaway_cfg.get("winners_line_template"),
+            winner_mentions=(winner_mentions or "—"),
+        )
+        lines += [winners_line]
+
     embed = discord.Embed(
-        title=f"{status_title} | سحب",
-        description=f"**Prize:** {prize}\n**الجائزة:** {prize}",
-        color=color
+        title=title,
+        description="\n".join(lines),
+        color=parse_color(giveaway_cfg.get("embed_color", "#5865F2")),
     )
-    embed.add_field(name="Hosted by | المستضيف", value=host.mention, inline=True)
-    embed.add_field(name="Winners | الفائزون", value=str(winners_count), inline=True)
-    embed.add_field(name="Entries | المشاركات", value=str(entries_count), inline=True)
-    time_label = "Ended" if ended else "Ends"
-    embed.add_field(name=f"{time_label} | ينتهي", value=f"<t:{end_ts}:F>\n(<t:{end_ts}:R>)", inline=False)
-    embed.set_footer(text=f"Click {emoji} to enter | اضغط {emoji} للمشاركة")
-    if image_url:
-        embed.set_image(url=image_url)
+    if giveaway_cfg.get("image_url"):
+        embed.set_image(url=str(giveaway_cfg.get("image_url")))
+    embed.set_footer(text=guild.name)
     return embed
 
-class GiveawayJoinView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
 
-    @discord.ui.button(label="Enter | دخول", style=discord.ButtonStyle.primary, emoji="🎉")
-    async def join_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
-        giveaway = active_giveaways.get(interaction.message.id)
-        if not giveaway:
-            return await interaction.response.send_message("❌ Giveaway انتهى", ephemeral=True)
-
-        if interaction.user.bot:
-            return await interaction.response.send_message("❌ Bots cannot join", ephemeral=True)
-
-        if interaction.user.id in giveaway["entries"]:
-            return await interaction.response.send_message("✅ You already entered | تم تسجيلك", ephemeral=True)
-
-        giveaway["entries"].add(interaction.user.id)
-
-        embed = build_giveaway_embed(
-            prize=giveaway["prize"],
-            host=interaction.guild.get_member(giveaway["host_id"]) or interaction.user,
-            end_ts=giveaway["end_ts"],
-            winners_count=giveaway["winners"],
-            entries_count=len(giveaway["entries"]),
-            color=discord.Color(giveaway["color"]),
-            emoji=giveaway["emoji"],
-            image_url=giveaway.get("image_url")
-        )
-        await interaction.message.edit(embed=embed, view=self)
-        await interaction.response.send_message("🎉 You joined the giveaway | تم تسجيلك في السحب", ephemeral=True)
-
-async def end_giveaway(message_id: int):
-    giveaway = active_giveaways.get(message_id)
-    if not giveaway:
+async def _giveaway_end_one(guild_id: int, record: dict):
+    try:
+        channel_id = int(record.get("channel_id"))
+        message_id = int(record.get("message_id"))
+        end_ts = int(record.get("end_ts"))
+        prize = str(record.get("prize", ""))
+        winners_count = int(record.get("winners", 1))
+        host_id = int(record.get("host_id"))
+        reaction_emoji = str(record.get("reaction_emoji") or "🎉")
+    except Exception:
         return
 
-    channel = bot.get_channel(giveaway["channel_id"])
+    channel = bot.get_channel(channel_id)
     if channel is None:
         try:
-            channel = await bot.fetch_channel(giveaway["channel_id"])
+            channel = await bot.fetch_channel(channel_id)
         except Exception:
-            active_giveaways.pop(message_id, None)
             return
 
     try:
         message = await channel.fetch_message(message_id)
     except Exception:
-        active_giveaways.pop(message_id, None)
         return
 
-    entries = list(giveaway["entries"])
-    winners_count = giveaway["winners"]
-    winners_ids = random.sample(entries, k=min(winners_count, len(entries))) if entries else []
+    guild = message.guild
+    giveaway_cfg = get_giveaway_config(guild_id)
+    giveaway_cfg["reaction_emoji"] = reaction_emoji
 
-    view = GiveawayJoinView()
-    for item in view.children:
-        if isinstance(item, discord.ui.Button):
-            item.disabled = True
-            item.emoji = giveaway["emoji"]
+    # Gather entries from reactions
+    entries: list[int] = []
+    try:
+        target_reaction = None
+        for r in message.reactions:
+            if str(r.emoji) == reaction_emoji:
+                target_reaction = r
+                break
 
-    embed = build_giveaway_embed(
-        prize=giveaway["prize"],
-        host=message.guild.get_member(giveaway["host_id"]) or message.guild.me,
-        end_ts=giveaway["end_ts"],
-        winners_count=giveaway["winners"],
-        entries_count=len(giveaway["entries"]),
-        color=discord.Color(giveaway["color"]),
-        emoji=giveaway["emoji"],
-        image_url=giveaway.get("image_url"),
-        ended=True
-    )
-    await message.edit(embed=embed, view=view)
+        if target_reaction is not None:
+            async for user in target_reaction.users(limit=None):
+                if user.bot:
+                    continue
+                entries.append(int(user.id))
+    except Exception:
+        entries = []
 
-    if winners_ids:
-        winners_mentions = " ".join(f"<@{user_id}>" for user_id in winners_ids)
-        await channel.send(f"🎉 **Winners | الفائزون:** {winners_mentions}\n**Prize | الجائزة:** {giveaway['prize']}")
+    # Dedup while preserving order
+    seen: set[int] = set()
+    entries = [x for x in entries if not (x in seen or seen.add(x))]
+
+    if not entries:
+        winners_ids: list[int] = []
     else:
-        await channel.send("❌ No valid entries | لا توجد مشاركات صحيحة")
+        winners_ids = random.sample(entries, k=min(max(1, winners_count), len(entries)))
 
-    active_giveaways.pop(message_id, None)
+    winner_mentions = " ".join(f"<@{uid}>" for uid in winners_ids) if winners_ids else "—"
+    host_member = guild.get_member(host_id) or guild.me
+    host_mention = host_member.mention if host_member else f"<@{host_id}>"
 
-async def schedule_giveaway_end(message_id: int, seconds: int):
-    await asyncio.sleep(seconds)
-    await end_giveaway(message_id)
-
-async def start_giveaway(interaction: discord.Interaction, prize: str, duration: str, winners: int, channel: discord.TextChannel = None):
-    seconds = parse_duration(duration)
-    if not seconds or seconds <= 0:
-        await interaction.response.send_message("❌ Duration format: 10s, 5m, 2h, 1d | صيغة المدة: 10s 5m 2h 1d", ephemeral=True)
-        return
-
-    if winners < 1:
-        await interaction.response.send_message("❌ Winners must be at least 1 | عدد الفائزين يجب أن يكون 1 على الأقل", ephemeral=True)
-        return
-
-    guild_cfg = get_guild_config(interaction.guild_id)
-    giveaway_cfg = guild_cfg.get("giveaway", {})
-
-    target_channel = channel
-    if target_channel is None and giveaway_cfg.get("channel_id"):
-        target_channel = interaction.guild.get_channel(int(giveaway_cfg.get("channel_id")))
-    if target_channel is None:
-        target_channel = interaction.channel
-
-    emoji = giveaway_cfg.get("emoji", "🎉")
-    color = parse_color(giveaway_cfg.get("color", "#5865F2"))
-    image_url = giveaway_cfg.get("image_url")
-
-    end_ts = int(datetime.utcnow().timestamp()) + seconds
-    embed = build_giveaway_embed(
+    ended_embed = build_giveaway_embed(
+        guild=guild,
+        giveaway_cfg=giveaway_cfg,
         prize=prize,
-        host=interaction.user,
+        host_mention=host_mention,
         end_ts=end_ts,
-        winners_count=winners,
-        entries_count=0,
-        color=color,
-        emoji=emoji,
-        image_url=image_url
+        winners_count=winners_count,
+        ended=True,
+        winner_mentions=winner_mentions,
     )
 
-    view = GiveawayJoinView()
-    for item in view.children:
-        if isinstance(item, discord.ui.Button):
-            item.emoji = emoji
+    try:
+        await message.edit(embed=ended_embed)
+    except Exception:
+        pass
 
-    message = await target_channel.send(embed=embed, view=view)
-    active_giveaways[message.id] = {
-        "guild_id": interaction.guild_id,
-        "channel_id": target_channel.id,
-        "prize": prize,
-        "host_id": interaction.user.id,
-        "end_ts": end_ts,
-        "winners": winners,
-        "entries": set(),
-        "emoji": emoji,
-        "color": color.value,
-        "image_url": image_url
-    }
+    try:
+        if winners_ids:
+            await channel.send(
+                f"🎉 **Winners | الفائزون:** {winner_mentions}\n"
+                f"**Prize | الجائزة:** {prize}"
+            )
+        else:
+            await channel.send(
+                f"❌ No valid entries | لا توجد مشاركات صحيحة\n"
+                f"**Prize | الجائزة:** {prize}"
+            )
+    except Exception:
+        pass
 
-    asyncio.create_task(schedule_giveaway_end(message.id, seconds))
-    if not interaction.response.is_done():
-        await interaction.response.send_message("✅ Giveaway started | تم بدء السحب", ephemeral=True)
-    else:
-        await interaction.followup.send("✅ Giveaway started | تم بدء السحب", ephemeral=True)
 
-class GiveawayModal(discord.ui.Modal, title="Giveaway | سحب"):
-    prize = discord.ui.TextInput(label="Prize | الجائزة", placeholder="Nitro / Role / Gift", max_length=200)
-    duration = discord.ui.TextInput(label="Duration (10m, 2h, 1d) | المدة", default="1h", max_length=20)
-    winners = discord.ui.TextInput(label="Winners | عدد الفائزين", default="1", max_length=3)
-    channel_id = discord.ui.TextInput(label="Channel ID (optional) | معرف القناة", required=False, max_length=25)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        channel = None
-        if self.channel_id.value:
+async def _giveaway_watcher_loop():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        now_ts = int(datetime.utcnow().timestamp())
+        for g in list(getattr(bot, "guilds", []) or []):
             try:
-                channel = interaction.guild.get_channel(int(self.channel_id.value))
+                gw = get_giveaway_config(g.id)
+                active = list(gw.get("active") or [])
+                if not active:
+                    continue
+
+                remaining: list[dict] = []
+                changed = False
+                for record in active:
+                    try:
+                        end_ts = int(record.get("end_ts"))
+                    except Exception:
+                        end_ts = 0
+
+                    if end_ts and end_ts <= now_ts:
+                        await _giveaway_end_one(g.id, record)
+                        changed = True
+                    else:
+                        remaining.append(record)
+
+                if changed:
+                    gw["active"] = remaining
+                    update_guild_config(g.id, {"giveaway": gw})
             except Exception:
-                channel = None
+                continue
 
-        try:
-            winners_count = int(self.winners.value)
-        except Exception:
-            winners_count = 1
+        await asyncio.sleep(15)
 
-        await start_giveaway(interaction, self.prize.value, self.duration.value, winners_count, channel)
 
-class GiveawayPanelView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
+def _giveaway_user_can_host(member: discord.Member, giveaway_cfg: dict) -> bool:
+    role_ids = giveaway_cfg.get("host_role_ids") or []
+    if role_ids:
+        return _member_has_any_role(member, [int(x) for x in role_ids])
+    return bool(member.guild_permissions.manage_guild)
 
-    @discord.ui.button(label="Create Giveaway | إنشاء سحب", style=discord.ButtonStyle.success, emoji="🎉")
-    async def create_giveaway(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(GiveawayModal())
 
-@bot.tree.command(name="giveawayf", description="Host a giveaway | إنشاء سحب")
-@app_commands.describe(prize="Prize", duration="Duration (10m, 2h, 1d)", winners="Number of winners", channel="Channel to host in")
-async def giveawayf(interaction: discord.Interaction, prize: str, duration: str, winners: int, channel: discord.TextChannel = None):
-    if not interaction.user.guild_permissions.manage_guild:
-        return await interaction.response.send_message("❌ You need Manage Server permission | تحتاج صلاحية إدارة السيرفر", ephemeral=True)
-    await start_giveaway(interaction, prize, duration, winners, channel)
+def _build_giveaway_settings_embed(guild: discord.Guild, giveaway_cfg: dict) -> discord.Embed:
+    host_roles = giveaway_cfg.get("host_role_ids") or []
+    if host_roles:
+        host_roles_text = " ".join(f"<@&{int(rid)}>" for rid in host_roles)
+    else:
+        host_roles_text = "Manage Server | إدارة السيرفر"
 
-@bot.tree.command(name="giveaway_panel", description="Open giveaway panel | فتح لوحة السحب")
-async def giveaway_panel(interaction: discord.Interaction):
-    if not interaction.user.guild_permissions.manage_guild:
-        return await interaction.response.send_message("❌ You need Manage Server permission | تحتاج صلاحية إدارة السيرفر", ephemeral=True)
+    channel_id = giveaway_cfg.get("channel_id")
+    channel_text = f"<#{int(channel_id)}>" if channel_id else "Current channel | نفس القناة"
 
     embed = discord.Embed(
-        title="🎁 Giveaway Panel | لوحة السحب",
-        description="**Create a giveaway with a simple panel**\n\n**أنشئ سحب بسهولة من اللوحة**",
-        color=discord.Color.blue()
+        title="🎁 Giveaway Settings | إعدادات السحب",
+        description="Configure giveaway style + hosting permissions.\n\nإعداد شكل السحب وصلاحيات الاستضافة.",
+        color=parse_color(giveaway_cfg.get("embed_color", "#5865F2")),
     )
-    embed.set_footer(text=interaction.guild.name)
-    await interaction.response.send_message(embed=embed, view=GiveawayPanelView(), ephemeral=True)
+    embed.add_field(name="Host Roles | رتب الاستضافة", value=host_roles_text, inline=False)
+    embed.add_field(name="Default Channel | القناة", value=channel_text, inline=False)
+    embed.add_field(name="Reaction Emoji | ايموجي التفاعل", value=str(giveaway_cfg.get("reaction_emoji", "🎉")), inline=True)
+    embed.add_field(name="Embed Color | اللون", value=str(giveaway_cfg.get("embed_color", "#5865F2")), inline=True)
+
+    img = str(giveaway_cfg.get("image_url") or "")
+    embed.add_field(name="Image | الصورة", value=(img if img else "(none) | لا يوجد"), inline=False)
+
+    embed.add_field(
+        name="Templates | التنسيق",
+        value=(
+            "Use {guild} {reaction} {prize} {host} {winners} {ends_at}\n"
+            "استخدم {guild} {reaction} {prize} {host} {winners} {ends_at}"
+        ),
+        inline=False,
+    )
+    embed.set_footer(text=guild.name)
+    return embed
+
+
+class GiveawayHostRolesModal(discord.ui.Modal, title="Host Roles | رتب الاستضافة"):
+    roles = discord.ui.TextInput(
+        label="Roles (mentions/IDs) | الرتب",
+        placeholder="@Role1 @Role2 أو 123...",
+        required=False,
+        style=discord.TextStyle.paragraph,
+        max_length=1000,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        gw["host_role_ids"] = _parse_role_ids_from_text(self.roles.value)
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class GiveawayReactionEmojiModal(discord.ui.Modal, title="Reaction Emoji | ايموجي التفاعل"):
+    emoji = discord.ui.TextInput(
+        label="Emoji | ايموجي",
+        placeholder="🎉 or <:name:id>",
+        required=True,
+        max_length=64,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        gw["reaction_emoji"] = str(self.emoji.value).strip()
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class GiveawayTemplatesModal(discord.ui.Modal, title="Templates | التنسيق"):
+    title_template = discord.ui.TextInput(
+        label="Title | العنوان",
+        default="🎁 {guild} Giveaways | سحوبات {guild}",
+        max_length=200,
+    )
+    react_line = discord.ui.TextInput(
+        label="React line | سطر التفاعل",
+        default="✨ React With {reaction} To Enter | تفاعل بـ {reaction} للدخول",
+        style=discord.TextStyle.paragraph,
+        max_length=400,
+    )
+    prize_line = discord.ui.TextInput(
+        label="Prize line | سطر الجائزة",
+        default="🎁 Prize : {prize} | الجائزة : {prize}",
+        style=discord.TextStyle.paragraph,
+        max_length=400,
+    )
+    host_line = discord.ui.TextInput(
+        label="Host line | سطر المستضيف",
+        default="👑 Hosted By : {host} | المستضيف : {host}",
+        style=discord.TextStyle.paragraph,
+        max_length=400,
+    )
+    end_line = discord.ui.TextInput(
+        label="End line | سطر النهاية",
+        default="Winner(s): {winners} • Ends: {ends_at} | الفائزون: {winners} • ينتهي: {ends_at}",
+        style=discord.TextStyle.paragraph,
+        max_length=400,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        gw["title_template"] = str(self.title_template.value)
+        gw["react_line_template"] = str(self.react_line.value)
+        gw["prize_line_template"] = str(self.prize_line.value)
+        gw["host_line_template"] = str(self.host_line.value)
+        gw["end_line_template"] = str(self.end_line.value)
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class GiveawayEmbedModal(discord.ui.Modal, title="Embed Settings | إعدادات الإيمبد"):
+    color = discord.ui.TextInput(
+        label="Color (#RRGGBB) | اللون",
+        placeholder="#5865F2",
+        required=False,
+        max_length=32,
+    )
+    image_url = discord.ui.TextInput(
+        label="Image URL | رابط الصورة",
+        placeholder="https://...",
+        required=False,
+        style=discord.TextStyle.paragraph,
+        max_length=400,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        if self.color.value and str(self.color.value).strip():
+            gw["embed_color"] = str(self.color.value).strip()
+        if self.image_url.value is not None:
+            gw["image_url"] = str(self.image_url.value).strip()
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class GiveawayChannelModal(discord.ui.Modal, title="Default Channel | القناة الافتراضية"):
+    channel = discord.ui.TextInput(
+        label="Channel mention/ID | منشن/ايدي",
+        placeholder="#giveaways or 123...",
+        required=False,
+        max_length=200,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        val = str(self.channel.value or "").strip()
+        channel_id = None
+        if val:
+            m = re.search(r"<#(?P<id>\d{5,25})>", val)
+            if m:
+                channel_id = int(m.group("id"))
+            else:
+                m2 = re.search(r"\b\d{5,25}\b", val)
+                if m2:
+                    channel_id = int(m2.group(0))
+
+        gw["channel_id"] = channel_id
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class GiveawaySettingsView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=300)
+        self.guild_id = int(guild_id)
+
+    async def _refresh(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        settings_embed = _build_giveaway_settings_embed(interaction.guild, gw)
+        preview_embed = build_giveaway_embed(
+            guild=interaction.guild,
+            giveaway_cfg=gw,
+            prize="2M",
+            host_mention=interaction.user.mention,
+            end_ts=int(datetime.utcnow().timestamp()) + 3600,
+            winners_count=1,
+            ended=False,
+        )
+        await interaction.response.edit_message(embeds=[settings_embed, preview_embed], view=self)
+
+    @discord.ui.button(label="Host Roles | رتب", style=discord.ButtonStyle.primary, row=0)
+    async def host_roles_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        await interaction.response.send_modal(GiveawayHostRolesModal())
+
+    @discord.ui.button(label="Reaction | تفاعل", style=discord.ButtonStyle.primary, row=0)
+    async def reaction_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        await interaction.response.send_modal(GiveawayReactionEmojiModal())
+
+    @discord.ui.button(label="Templates | تنسيق", style=discord.ButtonStyle.secondary, row=0)
+    async def templates_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        await interaction.response.send_modal(GiveawayTemplatesModal())
+
+    @discord.ui.button(label="Embed | إيمبد", style=discord.ButtonStyle.secondary, row=1)
+    async def embed_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        await interaction.response.send_modal(GiveawayEmbedModal())
+
+    @discord.ui.button(label="Channel | قناة", style=discord.ButtonStyle.secondary, row=1)
+    async def channel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        await interaction.response.send_modal(GiveawayChannelModal())
+
+    @discord.ui.button(label="Upload Image | رفع", style=discord.ButtonStyle.success, row=1)
+    async def upload_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+
+        await interaction.response.send_message(
+            "📷 Send an image **now** in this channel (60s) | ارسل الصورة الآن في نفس القناة (60 ثانية)",
+            ephemeral=True,
+        )
+
+        def check(msg: discord.Message):
+            return (
+                msg.guild
+                and msg.guild.id == interaction.guild_id
+                and msg.author.id == interaction.user.id
+                and msg.channel.id == interaction.channel_id
+                and msg.attachments
+            )
+
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=60)
+        except asyncio.TimeoutError:
+            return
+
+        att = msg.attachments[0]
+        gw = get_giveaway_config(interaction.guild_id)
+        gw["image_url"] = att.url
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+
+        try:
+            await interaction.followup.send("✅ Image updated | تم تحديث الصورة", ephemeral=True)
+        except Exception:
+            pass
+
+    @discord.ui.button(label="Refresh | تحديث", style=discord.ButtonStyle.secondary, row=2)
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._refresh(interaction)
+
+
+class GiveawayCreateModal(discord.ui.Modal, title="Giveaway | سحب"):
+    prize = discord.ui.TextInput(label="Prize | الجائزة", placeholder="Nitro / 2M / Role", max_length=200)
+    winners = discord.ui.TextInput(label="Winners | عدد الفائزين", default="1", max_length=3)
+    duration = discord.ui.TextInput(label="Duration (10m,2h,1d) | المدة", default="1h", max_length=20)
+    channel = discord.ui.TextInput(
+        label="Channel (optional) | قناة (اختياري)",
+        required=False,
+        placeholder="#giveaways or 123...",
+        max_length=200,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        if not _giveaway_user_can_host(interaction.user, gw):
+            return await interaction.response.send_message(
+                "❌ You can't host giveaways | لا يمكنك استضافة سحوبات",
+                ephemeral=True,
+            )
+
+        seconds = _parse_giveaway_duration_seconds(self.duration.value)
+        if not seconds or seconds <= 0:
+            return await interaction.response.send_message(
+                "❌ Duration format: 10s, 5m, 2h, 1d | صيغة المدة: 10s 5m 2h 1d",
+                ephemeral=True,
+            )
+
+        try:
+            winners_count = int(str(self.winners.value).strip())
+        except Exception:
+            winners_count = 1
+        winners_count = max(1, min(50, winners_count))
+
+        # Resolve channel
+        target_channel = None
+        val = str(self.channel.value or "").strip()
+        if val:
+            m = re.search(r"<#(?P<id>\d{5,25})>", val)
+            if m:
+                target_channel = interaction.guild.get_channel(int(m.group("id")))
+            else:
+                m2 = re.search(r"\b\d{5,25}\b", val)
+                if m2:
+                    target_channel = interaction.guild.get_channel(int(m2.group(0)))
+
+        if target_channel is None and gw.get("channel_id"):
+            target_channel = interaction.guild.get_channel(int(gw.get("channel_id")))
+        if target_channel is None:
+            target_channel = interaction.channel
+
+        reaction_emoji = str(gw.get("reaction_emoji", "🎉"))
+        end_ts = int(datetime.utcnow().timestamp()) + int(seconds)
+        embed = build_giveaway_embed(
+            guild=interaction.guild,
+            giveaway_cfg=gw,
+            prize=str(self.prize.value),
+            host_mention=interaction.user.mention,
+            end_ts=end_ts,
+            winners_count=winners_count,
+            ended=False,
+        )
+
+        message = await target_channel.send(embed=embed)
+        try:
+            await message.add_reaction(reaction_emoji)
+        except Exception:
+            try:
+                await message.add_reaction("🎉")
+                reaction_emoji = "🎉"
+            except Exception:
+                pass
+
+        active = list(gw.get("active") or [])
+        active.append(
+            {
+                "message_id": int(message.id),
+                "channel_id": int(target_channel.id),
+                "end_ts": int(end_ts),
+                "winners": int(winners_count),
+                "prize": str(self.prize.value),
+                "host_id": int(interaction.user.id),
+                "reaction_emoji": str(reaction_emoji),
+            }
+        )
+        gw["active"] = active
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+
+        await interaction.response.send_message("✅ Giveaway started | تم بدء السحب", ephemeral=True)
+
+
+@bot.tree.command(name="giveaway", description="Start a giveaway (form) | بدء سحب (نموذج)")
+async def giveaway_cmd(interaction: discord.Interaction):
+    gw = get_giveaway_config(interaction.guild_id)
+    if not _giveaway_user_can_host(interaction.user, gw):
+        return await interaction.response.send_message(
+            "❌ You can't host giveaways | لا يمكنك استضافة سحوبات",
+            ephemeral=True,
+        )
+    await interaction.response.send_modal(GiveawayCreateModal())
+
+
+@bot.tree.command(name="givaway", description="Start a giveaway (form) | بدء سحب (نموذج)")
+async def givaway_cmd(interaction: discord.Interaction):
+    await giveaway_cmd(interaction)
+
+
+@bot.tree.command(name="giveaway_panel", description="Open giveaway settings panel | فتح لوحة إعدادات السحب")
+async def giveaway_panel(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+
+    gw = get_giveaway_config(interaction.guild_id)
+    settings_embed = _build_giveaway_settings_embed(interaction.guild, gw)
+    preview_embed = build_giveaway_embed(
+        guild=interaction.guild,
+        giveaway_cfg=gw,
+        prize="2M",
+        host_mention=interaction.user.mention,
+        end_ts=int(datetime.utcnow().timestamp()) + 3600,
+        winners_count=1,
+        ended=False,
+    )
+    await interaction.response.send_message(
+        embeds=[settings_embed, preview_embed],
+        view=GiveawaySettingsView(interaction.guild_id),
+        ephemeral=True,
+    )
 
 @bot.event
 async def on_ready():
@@ -1405,6 +1809,11 @@ async def on_ready():
         if not getattr(bot, "_presence_task_started", False):
             bot._presence_task_started = True
             asyncio.create_task(_presence_rotator())
+
+        # Start giveaway watcher once
+        global _giveaway_watcher_task
+        if _giveaway_watcher_task is None or _giveaway_watcher_task.done():
+            _giveaway_watcher_task = asyncio.create_task(_giveaway_watcher_loop())
 
 
         # Restart enabled auto-clear workers after reboot
