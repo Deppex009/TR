@@ -28,6 +28,16 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Presence rotation
+PRESENCE_ROTATE_SECONDS = 10
+PRESENCE_ROTATE_TEXTS = [
+    "By Dep-A7",
+    "https://discord.gg/0tr",
+]
+# Discord doesn't support smooth animations; this is a tiny in-between text.
+PRESENCE_TRANSITION_ENABLED = True
+PRESENCE_TRANSITION_SECONDS = 0.7
+
 # Config file
 CONFIG_FILE = "poem_config.json"
 
@@ -1349,14 +1359,53 @@ async def giveaway_panel(interaction: discord.Interaction):
 async def on_ready():
     """Bot is ready"""
     try:
+        async def _presence_rotator():
+            await bot.wait_until_ready()
+            idx = 0
+            while not bot.is_closed():
+                current_text = PRESENCE_ROTATE_TEXTS[idx % len(PRESENCE_ROTATE_TEXTS)]
+                next_text = PRESENCE_ROTATE_TEXTS[(idx + 1) % len(PRESENCE_ROTATE_TEXTS)]
+
+                try:
+                    await bot.change_presence(
+                        activity=discord.Activity(
+                            type=discord.ActivityType.playing,
+                            name=str(current_text),
+                        )
+                    )
+                except Exception as e:
+                    logger.error(f"Presence update error: {e}")
+
+                # Optional mini-transition right before switching
+                if PRESENCE_TRANSITION_ENABLED:
+                    hold = max(0.0, float(PRESENCE_ROTATE_SECONDS) - float(PRESENCE_TRANSITION_SECONDS))
+                    await asyncio.sleep(hold)
+                    try:
+                        await bot.change_presence(
+                            activity=discord.Activity(
+                                type=discord.ActivityType.playing,
+                                name=f"{current_text} → {next_text}",
+                            )
+                        )
+                    except Exception as e:
+                        logger.error(f"Presence transition error: {e}")
+                    await asyncio.sleep(float(PRESENCE_TRANSITION_SECONDS))
+                else:
+                    await asyncio.sleep(float(PRESENCE_ROTATE_SECONDS))
+
+                idx += 1
+
         # Register persistent views once so old panels keep working after restarts.
         if not getattr(bot, "_persistent_views_added", False):
             bot.add_view(ModSettingsView())
             bot._persistent_views_added = True
 
         await bot.tree.sync()
-        activity = discord.Activity(type=discord.ActivityType.playing, name="By Dep-A7")
-        await bot.change_presence(activity=activity)
+        # Start rotating presence once
+        if not getattr(bot, "_presence_task_started", False):
+            bot._presence_task_started = True
+            asyncio.create_task(_presence_rotator())
+
 
         # Restart enabled auto-clear workers after reboot
         for g in bot.guilds:
