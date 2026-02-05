@@ -1940,19 +1940,81 @@ async def _voice247_ensure_connected(guild: discord.Guild):
         return
 
     vc = guild.voice_client
-    # Already connected to the right channel
-    if vc and vc.is_connected():
+
+    # If a VoiceClient exists but is stale/disconnected, discord.py will still block connect()
+    # with "Already connected". Clean it up first.
+    if vc is not None:
         try:
-            if vc.channel and int(vc.channel.id) != int(channel.id):
-                await vc.move_to(channel)
+            if vc.is_connected():
+                # Move if needed + enforce mute/deaf
+                try:
+                    if vc.channel and int(vc.channel.id) != int(channel.id):
+                        await vc.move_to(channel)
+                except Exception:
+                    pass
+
+                try:
+                    await guild.change_voice_state(
+                        channel=channel,
+                        self_mute=bool(cfg.get("self_mute", True)),
+                        self_deaf=bool(cfg.get("self_deaf", True)),
+                    )
+                except Exception:
+                    pass
+                return
+
+            # Stale client (not connected) -> force disconnect so connect() works
+            try:
+                await vc.disconnect(force=True)
+            except Exception:
+                pass
         except Exception:
             pass
-        return
 
     try:
-        await channel.connect(self_mute=bool(cfg.get("self_mute", True)), self_deaf=bool(cfg.get("self_deaf", True)))
+        await channel.connect(
+            self_mute=bool(cfg.get("self_mute", True)),
+            self_deaf=bool(cfg.get("self_deaf", True)),
+        )
+    except discord.ClientException as e:
+        # Fallback: if discord.py still thinks we're connected, try move_to
+        if "already connected" in str(e).lower():
+            try:
+                vc2 = guild.voice_client
+                if vc2 and vc2.channel and int(vc2.channel.id) != int(channel.id):
+                    await vc2.move_to(channel)
+                return
+            except Exception:
+                pass
+        logger.error(f"Voice247 connect error (guild {guild.id}): {e}")
     except Exception as e:
         logger.error(f"Voice247 connect error (guild {guild.id}): {e}")
+
+
+@bot.event
+async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    """Keep the bot in the configured 24/7 voice channel even if kicked/moved."""
+    try:
+        if not bot.user or int(member.id) != int(bot.user.id):
+            return
+        if not member.guild:
+            return
+
+        cfg = get_voice247_config(member.guild.id)
+        if not cfg.get("enabled"):
+            return
+
+        target_id = cfg.get("channel_id")
+        if not target_id:
+            return
+
+        # If kicked/disconnected OR moved to another channel, go back.
+        moved_or_kicked = (after.channel is None) or (int(after.channel.id) != int(target_id))
+        if moved_or_kicked:
+            await asyncio.sleep(1.0)
+            await _voice247_ensure_connected(member.guild)
+    except Exception:
+        pass
 
 
 async def _voice247_loop():
