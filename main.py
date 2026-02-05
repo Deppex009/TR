@@ -1159,6 +1159,10 @@ def get_giveaway_config(guild_id: int) -> dict:
         "reaction_emoji": "🎉",
         "embed_color": gw.get("color") if isinstance(gw.get("color"), str) else "#5865F2",
         "image_url": gw.get("image_url") if isinstance(gw.get("image_url"), str) else "",
+        # Optional content shown above the embed (same message content)
+        "above_message": "",
+        # Optional shortcut command
+        "shortcut_enabled": True,
         "title_template": "🎁 {guild} Giveaways | سحوبات {guild}",
         "react_line_template": "✨ React With {reaction} To Enter | تفاعل بـ {reaction} للدخول",
         "prize_line_template": "🎁 Prize : {prize} | الجائزة : {prize}",
@@ -1408,6 +1412,12 @@ def _build_giveaway_settings_embed(guild: discord.Guild, giveaway_cfg: dict) -> 
     img = str(giveaway_cfg.get("image_url") or "")
     embed.add_field(name="Image | الصورة", value=(img if img else "(none) | لا يوجد"), inline=False)
 
+    above = str(giveaway_cfg.get("above_message") or "").strip()
+    embed.add_field(name="Above Message | رسالة فوق", value=(above if above else "(none) | لا يوجد"), inline=False)
+
+    shortcut_state = "✅ Enabled | مفعل" if giveaway_cfg.get("shortcut_enabled", True) else "❌ Disabled | معطل"
+    embed.add_field(name="Shortcut /gstart | اختصار", value=shortcut_state, inline=False)
+
     embed.add_field(
         name="Templates | التنسيق",
         value=(
@@ -1455,40 +1465,66 @@ class GiveawayTemplatesModal(discord.ui.Modal, title="Templates | التنسيق
     title_template = discord.ui.TextInput(
         label="Title | العنوان",
         default="🎁 {guild} Giveaways | سحوبات {guild}",
+        required=False,
         max_length=200,
     )
     react_line = discord.ui.TextInput(
         label="React line | سطر التفاعل",
         default="✨ React With {reaction} To Enter | تفاعل بـ {reaction} للدخول",
         style=discord.TextStyle.paragraph,
+        required=False,
         max_length=400,
     )
     prize_line = discord.ui.TextInput(
         label="Prize line | سطر الجائزة",
         default="🎁 Prize : {prize} | الجائزة : {prize}",
         style=discord.TextStyle.paragraph,
+        required=False,
         max_length=400,
     )
     host_line = discord.ui.TextInput(
         label="Host line | سطر المستضيف",
         default="👑 Hosted By : {host} | المستضيف : {host}",
         style=discord.TextStyle.paragraph,
+        required=False,
         max_length=400,
     )
     end_line = discord.ui.TextInput(
         label="End line | سطر النهاية",
         default="Winner(s): {winners} • Ends: {ends_at} | الفائزون: {winners} • ينتهي: {ends_at}",
         style=discord.TextStyle.paragraph,
+        required=False,
         max_length=400,
     )
 
     async def on_submit(self, interaction: discord.Interaction):
         gw = get_giveaway_config(interaction.guild_id)
-        gw["title_template"] = str(self.title_template.value)
-        gw["react_line_template"] = str(self.react_line.value)
-        gw["prize_line_template"] = str(self.prize_line.value)
-        gw["host_line_template"] = str(self.host_line.value)
-        gw["end_line_template"] = str(self.end_line.value)
+        if str(self.title_template.value or "").strip():
+            gw["title_template"] = str(self.title_template.value)
+        if str(self.react_line.value or "").strip():
+            gw["react_line_template"] = str(self.react_line.value)
+        if str(self.prize_line.value or "").strip():
+            gw["prize_line_template"] = str(self.prize_line.value)
+        if str(self.host_line.value or "").strip():
+            gw["host_line_template"] = str(self.host_line.value)
+        if str(self.end_line.value or "").strip():
+            gw["end_line_template"] = str(self.end_line.value)
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class GiveawayAboveMessageModal(discord.ui.Modal, title="Above Message | رسالة فوق"):
+    message = discord.ui.TextInput(
+        label="Message (optional) | الرسالة",
+        placeholder="@everyone ...",
+        required=False,
+        style=discord.TextStyle.paragraph,
+        max_length=1500,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        gw["above_message"] = str(self.message.value or "").strip()
         update_guild_config(interaction.guild_id, {"giveaway": gw})
         await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
 
@@ -1627,6 +1663,22 @@ class GiveawaySettingsView(discord.ui.View):
         except Exception:
             pass
 
+    @discord.ui.button(label="Message | رسالة", style=discord.ButtonStyle.success, row=2)
+    async def message_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        await interaction.response.send_modal(GiveawayAboveMessageModal())
+
+    @discord.ui.button(label="Shortcut | اختصار", style=discord.ButtonStyle.primary, row=2)
+    async def shortcut_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        gw = get_giveaway_config(interaction.guild_id)
+        gw["shortcut_enabled"] = not bool(gw.get("shortcut_enabled", True))
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+        state = "enabled | مفعل" if gw["shortcut_enabled"] else "disabled | معطل"
+        await interaction.response.send_message(f"✅ Shortcut toggled: {state}", ephemeral=True)
+
     @discord.ui.button(label="Refresh | تحديث", style=discord.ButtonStyle.secondary, row=2)
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._refresh(interaction)
@@ -1693,7 +1745,18 @@ class GiveawayCreateModal(discord.ui.Modal, title="Giveaway | سحب"):
             ended=False,
         )
 
-        message = await target_channel.send(embed=embed)
+        above = str(gw.get("above_message") or "").strip()
+        if above:
+            above = _safe_format(
+                above,
+                guild=interaction.guild.name,
+                reaction=reaction_emoji,
+                prize=str(self.prize.value),
+                host=interaction.user.mention,
+                winners=winners_count,
+            )
+
+        message = await target_channel.send(content=(above if above else None), embed=embed)
         try:
             await message.add_reaction(reaction_emoji)
         except Exception:
@@ -1735,6 +1798,17 @@ async def giveaway_cmd(interaction: discord.Interaction):
 @bot.tree.command(name="givaway", description="Start a giveaway (form) | بدء سحب (نموذج)")
 async def givaway_cmd(interaction: discord.Interaction):
     await giveaway_cmd(interaction)
+
+
+@bot.tree.command(name="gstart", description="Giveaway shortcut (form) | اختصار السحب")
+async def gstart_cmd(interaction: discord.Interaction):
+    gw = get_giveaway_config(interaction.guild_id)
+    if not gw.get("shortcut_enabled", True):
+        return await interaction.response.send_message(
+            "❌ Shortcut disabled in panel | الاختصار معطل من اللوحة",
+            ephemeral=True,
+        )
+    return await giveaway_cmd(interaction)
 
 
 @bot.tree.command(name="giveaway_panel", description="Open giveaway settings panel | فتح لوحة إعدادات السحب")
