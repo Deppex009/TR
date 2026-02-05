@@ -1904,6 +1904,7 @@ _voice247_locks: dict[int, asyncio.Lock] = {}
 _voice247_next_attempt_at: dict[int, float] = {}
 _voice247_backoff_seconds: dict[int, float] = {}
 _voice247_suppress_until: dict[int, float] = {}
+_voice247_manual_until: dict[int, float] = {}
 
 
 def _voice247_lock_for(guild_id: int) -> asyncio.Lock:
@@ -1924,6 +1925,14 @@ def _voice247_clear_retry_state(guild_id: int):
     gid = int(guild_id)
     _voice247_next_attempt_at.pop(gid, None)
     _voice247_backoff_seconds.pop(gid, None)
+
+
+def _voice247_set_manual_window(guild_id: int, seconds: float = 6.0):
+    gid = int(guild_id)
+    now = _voice247_now()
+    if not now:
+        return
+    _voice247_manual_until[gid] = now + float(seconds)
 
 
 def get_voice247_config(guild_id: int) -> dict:
@@ -1958,6 +1967,10 @@ async def _voice247_ensure_connected(guild: discord.Guild, *, force: bool = Fals
     if not force and now and now < float(_voice247_suppress_until.get(gid, 0.0)):
         return
 
+    # If a user just pressed Join/Disable, avoid the loop/event fighting it.
+    if not force and now and now < float(_voice247_manual_until.get(gid, 0.0)):
+        return
+
     cfg = get_voice247_config(guild.id)
     if not cfg.get("enabled"):
         _voice247_clear_retry_state(gid)
@@ -1990,37 +2003,54 @@ async def _voice247_ensure_connected(guild: discord.Guild, *, force: bool = Fals
             _voice247_clear_retry_state(gid)
             return
 
+        # channel can be deleted/changed while we wait on the lock; re-resolve.
+        channel_id = cfg.get("channel_id")
+        if not channel_id:
+            return
+        channel = guild.get_channel(int(channel_id))
+        if channel is None or not isinstance(channel, discord.VoiceChannel):
+            return
+
         vc = guild.voice_client
 
-    # If a VoiceClient exists but is stale/disconnected, discord.py will still block connect()
-    # with "Already connected". Clean it up first.
-    if vc is not None:
-        try:
-            if vc.is_connected():
-                # Move if needed + enforce mute/deaf
-                try:
-                    if vc.channel and int(vc.channel.id) != int(channel.id):
-                        await vc.move_to(channel)
-                except Exception:
-                    pass
-
-                try:
-                    await guild.change_voice_state(
-                        channel=channel,
-                        self_mute=bool(cfg.get("self_mute", True)),
-                        self_deaf=bool(cfg.get("self_deaf", True)),
-                    )
-                except Exception:
-                    pass
-                return
-
-            # Stale client (not connected) -> force disconnect so connect() works
+        # If a VoiceClient exists but is stale/disconnected, discord.py may block connect()
+        # with "Already connected". Clean it up first.
+        if vc is not None:
             try:
-                await vc.disconnect(force=True)
+                if vc.is_connected():
+                    if vc.channel and int(vc.channel.id) != int(channel.id):
+                        try:
+                            await vc.move_to(channel)
+                        except Exception:
+                            try:
+                                await vc.disconnect(force=True)
+                            except Exception:
+                                pass
+                            vc = None
+
+                    # Enforce mute/deaf (best-effort)
+                    try:
+                        await guild.change_voice_state(
+                            channel=channel,
+                            self_mute=bool(cfg.get("self_mute", True)),
+                            self_deaf=bool(cfg.get("self_deaf", True)),
+                        )
+                    except Exception:
+                        pass
+
+                    # If we were able to stay connected (or moved), we're done.
+                    if guild.voice_client and guild.voice_client.is_connected():
+                        _voice247_clear_retry_state(gid)
+                        return
+
+                # Stale/connecting client -> force disconnect so connect() works
+                try:
+                    await vc.disconnect(force=True)
+                except Exception:
+                    pass
+                vc = None
             except Exception:
                 pass
-        except Exception:
-            pass
 
         try:
             await channel.connect(
@@ -2041,7 +2071,6 @@ async def _voice247_ensure_connected(guild: discord.Guild, *, force: bool = Fals
                 except Exception:
                     pass
 
-            # Backoff on repeated failures (common for voice handshake termination)
             backoff = float(_voice247_backoff_seconds.get(gid, 10.0))
             backoff = min(300.0, max(10.0, backoff * 1.7))
             _voice247_backoff_seconds[gid] = backoff
@@ -2176,6 +2205,7 @@ class Voice247View(discord.ui.View):
         # Clear backoff and attempt immediately
         _voice247_suppress_until.pop(int(interaction.guild_id), None)
         _voice247_clear_retry_state(int(interaction.guild_id))
+        _voice247_set_manual_window(int(interaction.guild_id), 8.0)
 
         await interaction.response.send_message("✅ Joining... | جاري الدخول...", ephemeral=True)
         try:
@@ -2193,11 +2223,12 @@ class Voice247View(discord.ui.View):
 
         gid = int(interaction.guild_id)
         # Suppress reconnects for a moment (disconnect triggers voice_state_update)
-        _voice247_suppress_until[gid] = _voice247_now() + 15.0
+        _voice247_set_manual_window(gid, 10.0)
+        _voice247_suppress_until[gid] = _voice247_now() + 30.0
         _voice247_clear_retry_state(gid)
         try:
             vc = interaction.guild.voice_client
-            if vc and vc.is_connected():
+            if vc:
                 await vc.disconnect(force=True)
         except Exception:
             pass
