@@ -148,7 +148,13 @@ def get_guild_config(guild_id):
                     "emoji": "🎉",
                     "color": "#5865F2",
                     "image_url": ""
-                }
+                },
+                "voice_247": {
+                    "enabled": False,
+                    "channel_id": None,
+                    "self_mute": True,
+                    "self_deaf": True,
+                },
             }
             config["servers"][guild_id_str] = default
             save_config(config)
@@ -188,7 +194,13 @@ def update_guild_config(guild_id, updates):
                 "emoji": "🎉",
                 "color": "#5865F2",
                 "image_url": ""
-            }
+            },
+            "voice_247": {
+                "enabled": False,
+                "channel_id": None,
+                "self_mute": True,
+                "self_deaf": True,
+            },
         }
     
     # Update with new values
@@ -1884,6 +1896,190 @@ async def giveaway_panel(interaction: discord.Interaction):
         ephemeral=True,
     )
 
+
+# ---------------- Voice 24/7 (AFK) ----------------
+
+_voice247_task: asyncio.Task | None = None
+
+
+def get_voice247_config(guild_id: int) -> dict:
+    guild_cfg = get_guild_config(guild_id)
+    v = guild_cfg.get("voice_247")
+    if not isinstance(v, dict):
+        v = {}
+
+    changed = False
+    defaults = {
+        "enabled": False,
+        "channel_id": None,
+        # "mic" in UI: mic ON => self_mute False
+        "self_mute": True,
+        "self_deaf": True,
+    }
+    for k, dv in defaults.items():
+        if k not in v:
+            v[k] = dv
+            changed = True
+
+    if changed:
+        update_guild_config(guild_id, {"voice_247": v})
+    return v
+
+
+async def _voice247_ensure_connected(guild: discord.Guild):
+    cfg = get_voice247_config(guild.id)
+    if not cfg.get("enabled"):
+        return
+
+    channel_id = cfg.get("channel_id")
+    if not channel_id:
+        return
+
+    channel = guild.get_channel(int(channel_id))
+    if channel is None or not isinstance(channel, discord.VoiceChannel):
+        return
+
+    vc = guild.voice_client
+    # Already connected to the right channel
+    if vc and vc.is_connected():
+        try:
+            if vc.channel and int(vc.channel.id) != int(channel.id):
+                await vc.move_to(channel)
+        except Exception:
+            pass
+        return
+
+    try:
+        await channel.connect(self_mute=bool(cfg.get("self_mute", True)), self_deaf=bool(cfg.get("self_deaf", True)))
+    except Exception as e:
+        logger.error(f"Voice247 connect error (guild {guild.id}): {e}")
+
+
+async def _voice247_loop():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        try:
+            for g in list(getattr(bot, "guilds", []) or []):
+                try:
+                    await _voice247_ensure_connected(g)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        await asyncio.sleep(30)
+
+
+def _voice247_panel_embed(guild: discord.Guild, cfg: dict) -> discord.Embed:
+    channel_id = cfg.get("channel_id")
+    channel_text = f"<#{int(channel_id)}>" if channel_id else "❌ Not set | غير محدد"
+    enabled = "✅ ON | شغال" if cfg.get("enabled") else "⛔ OFF | متوقف"
+    mic = "✅ ON | شغال" if not cfg.get("self_mute", True) else "❌ OFF | مطفي"
+    deaf = "✅ ON | شغال" if cfg.get("self_deaf", True) else "❌ OFF | مطفي"
+
+    embed = discord.Embed(
+        title="🔊 Voice 24/7 Panel | لوحة فويس 24/7",
+        description=(
+            "Choose the voice room + mic/deafen, then press **Join**.\n"
+            "The bot will stay 24/7 and auto-reconnect.\n\n"
+            "اختر روم الفويس + المايك/الديفن ثم اضغط **Join**.\n"
+            "البوت سيبقى 24/7 ويعيد الاتصال تلقائياً."
+        ),
+        color=discord.Color.blurple(),
+    )
+    embed.add_field(name="Status | الحالة", value=enabled, inline=False)
+    embed.add_field(name="Room | الروم", value=channel_text, inline=False)
+    embed.add_field(name="Mic | المايك", value=mic, inline=True)
+    embed.add_field(name="Deafen | ديفن", value=deaf, inline=True)
+    embed.set_footer(text=guild.name)
+    return embed
+
+
+class Voice247View(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=300)
+        self.guild_id = int(guild_id)
+
+    async def _refresh(self, interaction: discord.Interaction):
+        cfg = get_voice247_config(interaction.guild_id)
+        await interaction.response.edit_message(embed=_voice247_panel_embed(interaction.guild, cfg), view=self)
+
+    @discord.ui.select(
+        placeholder="Select voice room | اختر روم",
+        min_values=0,
+        max_values=1,
+        row=0,
+        cls=discord.ui.ChannelSelect,
+        channel_types=[discord.ChannelType.voice],
+    )
+    async def channel_select(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
+        cfg = get_voice247_config(interaction.guild_id)
+        if select.values:
+            ch = select.values[0]
+            cfg["channel_id"] = int(ch.id)
+        else:
+            cfg["channel_id"] = None
+        update_guild_config(interaction.guild_id, {"voice_247": cfg})
+        await self._refresh(interaction)
+
+    @discord.ui.button(label="Mic | مايك", style=discord.ButtonStyle.secondary, row=1)
+    async def mic_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        cfg = get_voice247_config(interaction.guild_id)
+        cfg["self_mute"] = not bool(cfg.get("self_mute", True))
+        update_guild_config(interaction.guild_id, {"voice_247": cfg})
+        await self._refresh(interaction)
+
+    @discord.ui.button(label="Deafen | ديفن", style=discord.ButtonStyle.secondary, row=1)
+    async def deaf_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        cfg = get_voice247_config(interaction.guild_id)
+        cfg["self_deaf"] = not bool(cfg.get("self_deaf", True))
+        update_guild_config(interaction.guild_id, {"voice_247": cfg})
+        await self._refresh(interaction)
+
+    @discord.ui.button(label="Join 24/7 | دخول", style=discord.ButtonStyle.success, row=1)
+    async def join_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+
+        cfg = get_voice247_config(interaction.guild_id)
+        if not cfg.get("channel_id"):
+            return await interaction.response.send_message("❌ Choose a voice room first | اختر روم أولاً", ephemeral=True)
+
+        cfg["enabled"] = True
+        update_guild_config(interaction.guild_id, {"voice_247": cfg})
+
+        await interaction.response.send_message("✅ Joining... | جاري الدخول...", ephemeral=True)
+        try:
+            await _voice247_ensure_connected(interaction.guild)
+        except Exception:
+            pass
+
+    @discord.ui.button(label="Disable | إيقاف", style=discord.ButtonStyle.danger, row=2)
+    async def disable_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        cfg = get_voice247_config(interaction.guild_id)
+        cfg["enabled"] = False
+        update_guild_config(interaction.guild_id, {"voice_247": cfg})
+        try:
+            vc = interaction.guild.voice_client
+            if vc and vc.is_connected():
+                await vc.disconnect(force=True)
+        except Exception:
+            pass
+        await interaction.response.send_message("✅ Disabled | تم الإيقاف", ephemeral=True)
+
+    @discord.ui.button(label="Refresh | تحديث", style=discord.ButtonStyle.primary, row=2)
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._refresh(interaction)
+
+
+@bot.tree.command(name="voice_panel", description="Voice 24/7 panel | لوحة فويس 24/7")
+async def voice_panel(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+    cfg = get_voice247_config(interaction.guild_id)
+    await interaction.response.send_message(embed=_voice247_panel_embed(interaction.guild, cfg), view=Voice247View(interaction.guild_id), ephemeral=True)
+
 @bot.event
 async def on_ready():
     """Bot is ready"""
@@ -1940,6 +2136,11 @@ async def on_ready():
         global _giveaway_watcher_task
         if _giveaway_watcher_task is None or _giveaway_watcher_task.done():
             _giveaway_watcher_task = asyncio.create_task(_giveaway_watcher_loop())
+
+        # Start voice 24/7 loop once
+        global _voice247_task
+        if _voice247_task is None or _voice247_task.done():
+            _voice247_task = asyncio.create_task(_voice247_loop())
 
 
         # Restart enabled auto-clear workers after reboot
