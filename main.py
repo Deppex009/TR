@@ -1161,8 +1161,8 @@ def get_giveaway_config(guild_id: int) -> dict:
         "image_url": gw.get("image_url") if isinstance(gw.get("image_url"), str) else "",
         # Optional content shown above the embed (same message content)
         "above_message": "",
-        # Optional shortcut command
-        "shortcut_enabled": True,
+        # Optional user shortcut word (type it in chat). Empty = disabled.
+        "shortcut_word": "",
         "title_template": "🎁 {guild} Giveaways | سحوبات {guild}",
         "react_line_template": "✨ React With {reaction} To Enter | تفاعل بـ {reaction} للدخول",
         "prize_line_template": "🎁 Prize : {prize} | الجائزة : {prize}",
@@ -1184,6 +1184,21 @@ def get_giveaway_config(guild_id: int) -> dict:
         changed = True
     if "color" in gw and "embed_color" not in gw and isinstance(gw.get("color"), str):
         gw["embed_color"] = gw.get("color")
+        changed = True
+
+    # Migrate old shortcut toggle -> shortcut word
+    if "shortcut_word" not in gw:
+        if gw.get("shortcut_enabled", True):
+            gw["shortcut_word"] = "gstart"
+        else:
+            gw["shortcut_word"] = ""
+        changed = True
+    if "shortcut_enabled" in gw:
+        # keep config clean
+        try:
+            gw.pop("shortcut_enabled", None)
+        except Exception:
+            pass
         changed = True
 
     # Ensure types
@@ -1415,8 +1430,12 @@ def _build_giveaway_settings_embed(guild: discord.Guild, giveaway_cfg: dict) -> 
     above = str(giveaway_cfg.get("above_message") or "").strip()
     embed.add_field(name="Above Message | رسالة فوق", value=(above if above else "(none) | لا يوجد"), inline=False)
 
-    shortcut_state = "✅ Enabled | مفعل" if giveaway_cfg.get("shortcut_enabled", True) else "❌ Disabled | معطل"
-    embed.add_field(name="Shortcut /gstart | اختصار", value=shortcut_state, inline=False)
+    shortcut_word = str(giveaway_cfg.get("shortcut_word") or "").strip()
+    embed.add_field(
+        name="Shortcut Word | كلمة اختصار",
+        value=(f"`{shortcut_word}`" if shortcut_word else "(disabled) | معطل"),
+        inline=False,
+    )
 
     embed.add_field(
         name="Templates | التنسيق",
@@ -1527,6 +1546,48 @@ class GiveawayAboveMessageModal(discord.ui.Modal, title="Above Message | رسا�
         gw["above_message"] = str(self.message.value or "").strip()
         update_guild_config(interaction.guild_id, {"giveaway": gw})
         await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class GiveawayShortcutWordModal(discord.ui.Modal, title="Shortcut Word | كلمة اختصار"):
+    word = discord.ui.TextInput(
+        label="Word (empty = disable) | كلمة (فارغ لتعطيل)",
+        placeholder="giveaway / سحب / gstart",
+        required=False,
+        max_length=30,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        raw = str(self.word.value or "").strip()
+        # Basic validation: no spaces, no leading '/', keep it simple.
+        if raw and (" " in raw or raw.startswith("/")):
+            return await interaction.response.send_message(
+                "❌ Invalid shortcut word (no spaces, no /) | كلمة غير صالحة",
+                ephemeral=True,
+            )
+        gw["shortcut_word"] = raw
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class GiveawayOpenFormView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Open Giveaway Form | فتح النموذج",
+        style=discord.ButtonStyle.success,
+        emoji="🎁",
+        custom_id="giveaway:open_form",
+    )
+    async def open_form(self, interaction: discord.Interaction, button: discord.ui.Button):
+        gw = get_giveaway_config(interaction.guild_id)
+        if not _giveaway_user_can_host(interaction.user, gw):
+            return await interaction.response.send_message(
+                "❌ You can't host giveaways | لا يمكنك استضافة سحوبات",
+                ephemeral=True,
+            )
+        await interaction.response.send_modal(GiveawayCreateModal())
 
 
 class GiveawayEmbedModal(discord.ui.Modal, title="Embed Settings | إعدادات الإيمبد"):
@@ -1669,15 +1730,11 @@ class GiveawaySettingsView(discord.ui.View):
             return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(GiveawayAboveMessageModal())
 
-    @discord.ui.button(label="Shortcut | اختصار", style=discord.ButtonStyle.primary, row=2)
+    @discord.ui.button(label="Shortcut Word | اختصار", style=discord.ButtonStyle.primary, row=2)
     async def shortcut_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
-        gw = get_giveaway_config(interaction.guild_id)
-        gw["shortcut_enabled"] = not bool(gw.get("shortcut_enabled", True))
-        update_guild_config(interaction.guild_id, {"giveaway": gw})
-        state = "enabled | مفعل" if gw["shortcut_enabled"] else "disabled | معطل"
-        await interaction.response.send_message(f"✅ Shortcut toggled: {state}", ephemeral=True)
+        await interaction.response.send_modal(GiveawayShortcutWordModal())
 
     @discord.ui.button(label="Refresh | تحديث", style=discord.ButtonStyle.secondary, row=2)
     async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1802,12 +1859,6 @@ async def givaway_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="gstart", description="Giveaway shortcut (form) | اختصار السحب")
 async def gstart_cmd(interaction: discord.Interaction):
-    gw = get_giveaway_config(interaction.guild_id)
-    if not gw.get("shortcut_enabled", True):
-        return await interaction.response.send_message(
-            "❌ Shortcut disabled in panel | الاختصار معطل من اللوحة",
-            ephemeral=True,
-        )
     return await giveaway_cmd(interaction)
 
 
@@ -1876,6 +1927,7 @@ async def on_ready():
         # Register persistent views once so old panels keep working after restarts.
         if not getattr(bot, "_persistent_views_added", False):
             bot.add_view(ModSettingsView())
+            bot.add_view(GiveawayOpenFormView())
             bot._persistent_views_added = True
 
         await bot.tree.sync()
@@ -5178,6 +5230,22 @@ async def on_message(message):
                     pass
     except Exception as e:
         logger.error(f"Channel auto error: {e}")
+
+    # ----- Giveaway custom shortcut word -----
+    try:
+        gw = get_giveaway_config(message.guild.id)
+        word = str(gw.get("shortcut_word") or "").strip()
+        if word:
+            content = str(message.content or "").strip()
+            if content.lower() == word.lower():
+                # Post an interaction button (modals require interactions)
+                await message.channel.send(
+                    "🎁 Click to open the giveaway form | اضغط لفتح نموذج السحب",
+                    view=GiveawayOpenFormView(),
+                    delete_after=60,
+                )
+    except Exception:
+        pass
     
     # Check for shortcuts
     if message.guild:
