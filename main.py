@@ -3496,7 +3496,7 @@ class TicketSetupPanelView(discord.ui.View):
         super().__init__(timeout=None)
         self.guild_id = int(guild_id)
 
-    @discord.ui.button(label="Panel | اللوحة", emoji="🎨", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Panel | لوحة", emoji="🎨", style=discord.ButtonStyle.primary, row=0)
     async def panel(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.send_modal(TicketSetupPanelModal1(self.guild_id))
@@ -3506,7 +3506,7 @@ class TicketSetupPanelView(discord.ui.View):
             else:
                 await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
-    @discord.ui.button(label="Channels | القنوات", emoji="📁", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Channels | قنوات", emoji="📁", style=discord.ButtonStyle.primary, row=0)
     async def channels(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.send_modal(TicketSetupChannelsModal(self.guild_id))
@@ -3516,7 +3516,7 @@ class TicketSetupPanelView(discord.ui.View):
             else:
                 await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
-    @discord.ui.button(label="Roles | الأدوار", emoji="👥", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(label="Roles | أدوار", emoji="👥", style=discord.ButtonStyle.primary, row=0)
     async def roles(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.send_modal(TicketSetupRolesModal(self.guild_id))
@@ -3526,7 +3526,7 @@ class TicketSetupPanelView(discord.ui.View):
             else:
                 await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
-    @discord.ui.button(label="Add Option | إضافة خيار", emoji="➕", style=discord.ButtonStyle.success, row=1)
+    @discord.ui.button(label="Add Option | إضافة", emoji="➕", style=discord.ButtonStyle.success, row=1)
     async def add_option(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.send_modal(TicketSetupAddOptionModal(self.guild_id))
@@ -3536,7 +3536,7 @@ class TicketSetupPanelView(discord.ui.View):
             else:
                 await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
-    @discord.ui.button(label="Remove Option | حذف خيار", emoji="🗑️", style=discord.ButtonStyle.danger, row=1)
+    @discord.ui.button(label="Remove Option | حذف", emoji="🗑️", style=discord.ButtonStyle.danger, row=1)
     async def remove_option(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.send_modal(TicketSetupRemoveOptionModal(self.guild_id))
@@ -3546,7 +3546,7 @@ class TicketSetupPanelView(discord.ui.View):
             else:
                 await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
-    @discord.ui.button(label="Messages | الرسائل", emoji="📝", style=discord.ButtonStyle.primary, row=2)
+    @discord.ui.button(label="Messages | رسائل", emoji="📝", style=discord.ButtonStyle.primary, row=2)
     async def messages(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.send_modal(TicketSetupMessagesModal1(self.guild_id))
@@ -3556,7 +3556,7 @@ class TicketSetupPanelView(discord.ui.View):
             else:
                 await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
-    @discord.ui.button(label="Buttons | الأزرار", emoji="🔘", style=discord.ButtonStyle.primary, row=2)
+    @discord.ui.button(label="Buttons | أزرار", emoji="🔘", style=discord.ButtonStyle.primary, row=2)
     async def buttons(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.send_modal(TicketSetupButtonsModal1(self.guild_id))
@@ -3566,7 +3566,7 @@ class TicketSetupPanelView(discord.ui.View):
             else:
                 await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
-    @discord.ui.button(label="Embeds | الإمبد", emoji="🎨", style=discord.ButtonStyle.secondary, row=2)
+    @discord.ui.button(label="Embeds | إمبد", emoji="🎨", style=discord.ButtonStyle.secondary, row=2)
     async def embeds(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.send_modal(TicketSetupEmbedsModal(self.guild_id))
@@ -3576,7 +3576,7 @@ class TicketSetupPanelView(discord.ui.View):
             else:
                 await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
-    @discord.ui.button(label="Menu | القائمة", emoji="🎛️", style=discord.ButtonStyle.secondary, row=3)
+    @discord.ui.button(label="Menu | قائمة", emoji="🎛️", style=discord.ButtonStyle.secondary, row=3)
     async def menu(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             await interaction.response.send_modal(TicketSetupMenuModal(self.guild_id))
