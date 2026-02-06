@@ -3505,6 +3505,18 @@ class TicketSetupPanelView(discord.ui.View):
     async def remove_option(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(TicketSetupRemoveOptionModal(self.guild_id))
 
+    @discord.ui.button(label="Messages | الرسائل", emoji="📝", style=discord.ButtonStyle.primary, row=2)
+    async def messages(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketSetupMessagesModal(self.guild_id))
+
+    @discord.ui.button(label="Buttons | الأزرار", emoji="🔘", style=discord.ButtonStyle.primary, row=2)
+    async def buttons(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketSetupButtonsModal(self.guild_id))
+
+    @discord.ui.button(label="Embeds | الإمبد", emoji="🎨", style=discord.ButtonStyle.secondary, row=2)
+    async def embeds(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketSetupEmbedsModal(self.guild_id))
+
     @discord.ui.button(label="Refresh | تحديث", emoji="🔄", style=discord.ButtonStyle.secondary, row=1)
     async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
         tcfg = get_ticket_config(self.guild_id)
@@ -3532,9 +3544,27 @@ class TicketSetupPanelModal(discord.ui.Modal):
             required=False,
         )
         self.color_input = discord.ui.TextInput(
-            label="Embed color | لون الامبد",
-            default=str(tcfg.get("embed_color", "#9B59B6"))[:32],
-            max_length=32,
+            label="Panel embed color | لون امبد اللوحة",
+            default=str(tcfg.get("panel_embed_color", tcfg.get("embed_color", "#9B59B6")))[:64],
+            max_length=64,
+            required=False,
+        )
+        self.panel_image = discord.ui.TextInput(
+            label="Panel image URL | رابط صورة اللوحة",
+            default=str(tcfg.get("panel_image", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.panel_author_name = discord.ui.TextInput(
+            label="Panel author name | اسم الكاتب",
+            default=str(tcfg.get("panel_author_name", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.panel_author_icon = discord.ui.TextInput(
+            label="Panel author icon URL | رابط أيقونة الكاتب",
+            default=str(tcfg.get("panel_author_icon", ""))[:4000],
+            max_length=4000,
             required=False,
         )
         self.dropdown_ph = discord.ui.TextInput(
@@ -3553,6 +3583,9 @@ class TicketSetupPanelModal(discord.ui.Modal):
         self.add_item(self.title_input)
         self.add_item(self.desc_input)
         self.add_item(self.color_input)
+        self.add_item(self.panel_image)
+        self.add_item(self.panel_author_name)
+        self.add_item(self.panel_author_icon)
         self.add_item(self.dropdown_ph)
         self.add_item(self.menu_ph)
 
@@ -3563,7 +3596,13 @@ class TicketSetupPanelModal(discord.ui.Modal):
         if self.desc_input.value.strip():
             tcfg["panel_description"] = self.desc_input.value.strip()
         if self.color_input.value.strip():
-            tcfg["embed_color"] = self.color_input.value.strip()
+            tcfg["panel_embed_color"] = self.color_input.value.strip()
+        if self.panel_image.value.strip():
+            tcfg["panel_image"] = self.panel_image.value.strip()
+        if self.panel_author_name.value.strip():
+            tcfg["panel_author_name"] = self.panel_author_name.value.strip()
+        if self.panel_author_icon.value.strip():
+            tcfg["panel_author_icon"] = self.panel_author_icon.value.strip()
         if self.dropdown_ph.value.strip():
             tcfg["dropdown_placeholder"] = self.dropdown_ph.value.strip()
         if self.menu_ph.value.strip():
@@ -3604,6 +3643,318 @@ class TicketSetupChannelsModal(discord.ui.Modal):
 
         update_guild_config(self.guild_id, {"tickets": tcfg})
         await interaction.response.send_message("✅ Updated | تم تحديث القنوات", ephemeral=True)
+
+
+class TicketSetupMessagesModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        tcfg = get_ticket_config(self.guild_id)
+        msg = tcfg.get("messages", {})
+        super().__init__(title="📝 Messages | الرسائل")
+
+        self.ticket_title = discord.ui.TextInput(
+            label="Ticket title | عنوان التذكرة",
+            default=str(msg.get("ticket_created_title", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.ticket_desc = discord.ui.TextInput(
+            label="Ticket description | وصف التذكرة",
+            default=str(msg.get("ticket_created_desc", ""))[:2000],
+            style=discord.TextStyle.paragraph,
+            max_length=2000,
+            required=False,
+        )
+        self.modal_title = discord.ui.TextInput(
+            label="Modal title | عنوان المودال",
+            default=str(msg.get("modal_title", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.modal_placeholder = discord.ui.TextInput(
+            label="Modal placeholder | نص المودال",
+            default=str(msg.get("modal_placeholder", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.reason_label = discord.ui.TextInput(
+            label="Reason label | اسم السبب",
+            default=str(msg.get("reason_label", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.reason_field_name = discord.ui.TextInput(
+            label="Reason field name | عنوان السبب",
+            default=str(msg.get("reason_field_name", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.by_label = discord.ui.TextInput(
+            label="By label | بواسطة",
+            default=str(msg.get("ticket_by_label", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.by_emoji = discord.ui.TextInput(
+            label="By emoji | ايموجي بواسطة",
+            default=str(msg.get("by_emoji", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.footer_text = discord.ui.TextInput(
+            label="Footer text | نص الفوتر",
+            default=str(msg.get("footer_text", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.claim_message = discord.ui.TextInput(
+            label="Claim message | رسالة الاستدعاء",
+            default=str(msg.get("claim_message", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.claim_emoji = discord.ui.TextInput(
+            label="Claim emoji | ايموجي الاستدعاء",
+            default=str(msg.get("claim_emoji", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.ping_admin_message = discord.ui.TextInput(
+            label="Ping admin message | رسالة استدعاء الإدارة",
+            default=str(msg.get("ping_admin_message", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.mention_member_message = discord.ui.TextInput(
+            label="Mention member message | رسالة منشن العضو",
+            default=str(msg.get("mention_member_message", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+
+        self.add_item(self.ticket_title)
+        self.add_item(self.ticket_desc)
+        self.add_item(self.modal_title)
+        self.add_item(self.modal_placeholder)
+        self.add_item(self.reason_label)
+        self.add_item(self.reason_field_name)
+        self.add_item(self.by_label)
+        self.add_item(self.by_emoji)
+        self.add_item(self.footer_text)
+        self.add_item(self.claim_message)
+        self.add_item(self.claim_emoji)
+        self.add_item(self.ping_admin_message)
+        self.add_item(self.mention_member_message)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        tcfg = get_ticket_config(self.guild_id)
+        msg = tcfg.get("messages", {})
+
+        if self.ticket_title.value.strip():
+            msg["ticket_created_title"] = self.ticket_title.value.strip()
+        if self.ticket_desc.value.strip():
+            msg["ticket_created_desc"] = self.ticket_desc.value.strip()
+        if self.modal_title.value.strip():
+            msg["modal_title"] = self.modal_title.value.strip()
+        if self.modal_placeholder.value.strip():
+            msg["modal_placeholder"] = self.modal_placeholder.value.strip()
+        if self.reason_label.value.strip():
+            msg["reason_label"] = self.reason_label.value.strip()
+        if self.reason_field_name.value.strip():
+            msg["reason_field_name"] = self.reason_field_name.value.strip()
+        if self.by_label.value.strip():
+            msg["ticket_by_label"] = self.by_label.value.strip()
+        if self.by_emoji.value.strip():
+            msg["by_emoji"] = self.by_emoji.value.strip()
+        if self.footer_text.value.strip():
+            msg["footer_text"] = self.footer_text.value.strip()
+        if self.claim_message.value.strip():
+            msg["claim_message"] = self.claim_message.value.strip()
+        if self.claim_emoji.value.strip():
+            msg["claim_emoji"] = self.claim_emoji.value.strip()
+        if self.ping_admin_message.value.strip():
+            msg["ping_admin_message"] = self.ping_admin_message.value.strip()
+        if self.mention_member_message.value.strip():
+            msg["mention_member_message"] = self.mention_member_message.value.strip()
+
+        tcfg["messages"] = msg
+        update_guild_config(self.guild_id, {"tickets": tcfg})
+        await interaction.response.send_message("✅ Updated | تم تحديث الرسائل", ephemeral=True)
+
+
+class TicketSetupButtonsModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        tcfg = get_ticket_config(self.guild_id)
+        btn = tcfg.get("buttons", {})
+        super().__init__(title="🔘 Buttons | الأزرار")
+
+        self.close_label = discord.ui.TextInput(
+            label="Close label | نص الإغلاق",
+            default=str(btn.get("close", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.close_emoji = discord.ui.TextInput(
+            label="Close emoji | ايموجي الإغلاق",
+            default=str(btn.get("close_emoji", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.close_style = discord.ui.TextInput(
+            label="Close color | لون الإغلاق",
+            default=str(btn.get("close_style", ""))[:50],
+            max_length=50,
+            required=False,
+        )
+
+        self.claim_label = discord.ui.TextInput(
+            label="Claim label | نص الاستلام",
+            default=str(btn.get("claim", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.claim_emoji = discord.ui.TextInput(
+            label="Claim emoji | ايموجي الاستلام",
+            default=str(btn.get("claim_emoji", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.claim_style = discord.ui.TextInput(
+            label="Claim color | لون الاستلام",
+            default=str(btn.get("claim_style", ""))[:50],
+            max_length=50,
+            required=False,
+        )
+
+        self.ping_label = discord.ui.TextInput(
+            label="Ping admin label | نص الاستدعاء",
+            default=str(btn.get("ping_admin", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.ping_emoji = discord.ui.TextInput(
+            label="Ping admin emoji | ايموجي الاستدعاء",
+            default=str(btn.get("ping_admin_emoji", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.ping_style = discord.ui.TextInput(
+            label="Ping admin color | لون الاستدعاء",
+            default=str(btn.get("ping_admin_style", ""))[:50],
+            max_length=50,
+            required=False,
+        )
+
+        self.mention_label = discord.ui.TextInput(
+            label="Mention member label | نص منشن العضو",
+            default=str(btn.get("mention_member", ""))[:256],
+            max_length=256,
+            required=False,
+        )
+        self.mention_emoji = discord.ui.TextInput(
+            label="Mention member emoji | ايموجي منشن العضو",
+            default=str(btn.get("mention_member_emoji", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.mention_style = discord.ui.TextInput(
+            label="Mention member color | لون منشن العضو",
+            default=str(btn.get("mention_member_style", ""))[:50],
+            max_length=50,
+            required=False,
+        )
+
+        self.add_item(self.close_label)
+        self.add_item(self.close_emoji)
+        self.add_item(self.close_style)
+        self.add_item(self.claim_label)
+        self.add_item(self.claim_emoji)
+        self.add_item(self.claim_style)
+        self.add_item(self.ping_label)
+        self.add_item(self.ping_emoji)
+        self.add_item(self.ping_style)
+        self.add_item(self.mention_label)
+        self.add_item(self.mention_emoji)
+        self.add_item(self.mention_style)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        tcfg = get_ticket_config(self.guild_id)
+        btn = tcfg.get("buttons", {})
+
+        if self.close_label.value.strip():
+            btn["close"] = self.close_label.value.strip()
+        if self.close_emoji.value.strip():
+            btn["close_emoji"] = self.close_emoji.value.strip()
+        if self.close_style.value.strip():
+            btn["close_style"] = self.close_style.value.strip()
+
+        if self.claim_label.value.strip():
+            btn["claim"] = self.claim_label.value.strip()
+        if self.claim_emoji.value.strip():
+            btn["claim_emoji"] = self.claim_emoji.value.strip()
+        if self.claim_style.value.strip():
+            btn["claim_style"] = self.claim_style.value.strip()
+
+        if self.ping_label.value.strip():
+            btn["ping_admin"] = self.ping_label.value.strip()
+        if self.ping_emoji.value.strip():
+            btn["ping_admin_emoji"] = self.ping_emoji.value.strip()
+        if self.ping_style.value.strip():
+            btn["ping_admin_style"] = self.ping_style.value.strip()
+
+        if self.mention_label.value.strip():
+            btn["mention_member"] = self.mention_label.value.strip()
+        if self.mention_emoji.value.strip():
+            btn["mention_member_emoji"] = self.mention_emoji.value.strip()
+        if self.mention_style.value.strip():
+            btn["mention_member_style"] = self.mention_style.value.strip()
+
+        tcfg["buttons"] = btn
+        update_guild_config(self.guild_id, {"tickets": tcfg})
+        await interaction.response.send_message("✅ Updated | تم تحديث الأزرار", ephemeral=True)
+
+
+class TicketSetupEmbedsModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        tcfg = get_ticket_config(self.guild_id)
+        super().__init__(title="🎨 Embeds | الإمبد")
+
+        self.ticket_color = discord.ui.TextInput(
+            label="Ticket embed color | لون امبد التذكرة",
+            default=str(tcfg.get("ticket_embed_color", tcfg.get("embed_color", "#9B59B6")))[:64],
+            max_length=64,
+            required=False,
+        )
+        self.ticket_image = discord.ui.TextInput(
+            label="Ticket image URL | رابط صورة التذكرة",
+            default=str(tcfg.get("ticket_image", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+        self.reason_image = discord.ui.TextInput(
+            label="Reason image URL | رابط صورة السبب",
+            default=str(tcfg.get("reason_image", ""))[:4000],
+            max_length=4000,
+            required=False,
+        )
+
+        self.add_item(self.ticket_color)
+        self.add_item(self.ticket_image)
+        self.add_item(self.reason_image)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        tcfg = get_ticket_config(self.guild_id)
+        if self.ticket_color.value.strip():
+            tcfg["ticket_embed_color"] = self.ticket_color.value.strip()
+        if self.ticket_image.value.strip():
+            tcfg["ticket_image"] = self.ticket_image.value.strip()
+        if self.reason_image.value.strip():
+            tcfg["reason_image"] = self.reason_image.value.strip()
+
+        update_guild_config(self.guild_id, {"tickets": tcfg})
+        await interaction.response.send_message("✅ Updated | تم تحديث الإمبد", ephemeral=True)
 
 
 class TicketSetupRolesModal(discord.ui.Modal):
