@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Deploy marker (helps confirm Discloud pulled latest code)
-DEPLOY_MARKER = "2026-02-04T00:00Z"
+DEPLOY_MARKER = "2026-02-05T00:00Z"
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -229,6 +229,8 @@ def get_ticket_config(guild_id: int):
     _set_default("log_channel_id", None)
     _set_default("admin_role_id", None)
     _set_default("embed_color", "#9B59B6")
+    _set_default("panel_embed_color", "#9B59B6")
+    _set_default("ticket_embed_color", "#9B59B6")
     _set_default("panel_title", "🎫 Tickets | التكيت")
     _set_default("panel_description", "اختر نوع التكيت من القائمة أدناه | Choose a ticket type below")
     _set_default("dropdown_placeholder", "إضغط لفتح التكيت")
@@ -236,6 +238,8 @@ def get_ticket_config(guild_id: int):
     _set_default("panel_image", "")
     _set_default("panel_author_icon", "")
     _set_default("panel_author_name", "Ticket System")
+    _set_default("ticket_image", "")
+    _set_default("reason_image", "")
     _set_default("ticket_counter", 0)
     _set_default("support_roles", [])
     _set_default("ping_roles", [])
@@ -284,6 +288,7 @@ def get_ticket_config(guild_id: int):
         "modal_title": "فتح تذكرة",
         "reason_label": "السبب",
         "modal_placeholder": "اذكر سبب فتح للتذكره :",
+        "ticket_created_title": "فتح تذكرة",
         "ticket_created_desc": "✅ تم فتح التكيت بنجاح",
         "ticket_created_success": "✅ تم فتح التكيت",
         "ticket_by_label": "بواسطة",
@@ -398,6 +403,42 @@ def parse_color(color_input):
     
     # Default fallback color
     return discord.Color(0x9B59B6)
+
+def _coerce_component_emoji(value):
+    """Accept unicode emoji, custom emoji strings, or raw IDs for UI components."""
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    # Normalize common wrappers like <a:name:id> or <:name:id>
+    candidate = raw.strip()
+    if candidate.startswith("<") and candidate.endswith(">"):
+        candidate = candidate[1:-1].strip()
+
+    # Try custom emoji formats: a:name:id, name:id
+    if ":" in candidate:
+        parts = candidate.split(":")
+        if len(parts) == 3 and parts[0] == "a":
+            name, emoji_id = parts[1], parts[2]
+            if emoji_id.isdigit():
+                return discord.PartialEmoji(name=name or "emoji", id=int(emoji_id), animated=True)
+        if len(parts) == 2:
+            name, emoji_id = parts[0], parts[1]
+            if emoji_id.isdigit():
+                return discord.PartialEmoji(name=name or "emoji", id=int(emoji_id), animated=False)
+
+    # Raw emoji ID
+    if re.fullmatch(r"\d{15,25}", candidate):
+        return discord.PartialEmoji(name="emoji", id=int(candidate))
+
+    # If it looks like a custom emoji but failed parsing, drop it.
+    if ":" in raw or raw.startswith("<"):
+        return None
+
+    # Fallback to unicode emoji
+    return raw
 
 
 def _parse_bool_text(value: str | None, default: bool = False) -> bool:
@@ -2676,10 +2717,11 @@ class TicketDropdown(discord.ui.Select):
         tcfg = get_ticket_config(self.guild_id)
         options = []
         for option in tcfg.get("ticket_options", []):
+            emoji_value = _coerce_component_emoji(option.get("emoji")) or "🎫"
             options.append(
                 discord.SelectOption(
                     label=option["label"],
-                    emoji=option.get("emoji", "🎫"),
+                    emoji=emoji_value,
                     description=option.get("description", ""),
                     value=option["label"],
                 )
@@ -2774,14 +2816,16 @@ class TicketReasonModal(discord.ui.Modal):
             
             # Create ticket embed
             embed = discord.Embed(
-                title=self.ticket_type,
+                title=tcfg.get("messages", {}).get("ticket_created_title") or self.ticket_type,
                 description=tcfg.get("messages", {}).get("ticket_created_desc", "✅ تم فتح التكيت بنجاح"),
-                color=parse_color(tcfg.get("embed_color", "#9B59B6"))
+                color=parse_color(tcfg.get("ticket_embed_color", tcfg.get("embed_color", "#9B59B6")))
             )
             
             # Add ticket image
             if tcfg.get("panel_image") and str(tcfg.get("panel_image")).strip():
                 embed.set_image(url=str(tcfg.get("panel_image")).strip())
+            if tcfg.get("ticket_image") and str(tcfg.get("ticket_image")).strip():
+                embed.set_image(url=str(tcfg.get("ticket_image")).strip())
             
             # Add fields
             by_label = tcfg.get("messages", {}).get("ticket_by_label", "بواسطة")
@@ -2799,8 +2843,10 @@ class TicketReasonModal(discord.ui.Modal):
             reason_field_name = tcfg.get("messages", {}).get("reason_field_name", "REASON:")
             reason_embed = discord.Embed(
                 description=f"**{reason_field_name}**\n{self.reason.value}",
-                color=parse_color(tcfg.get("embed_color", "#9B59B6"))
+                color=parse_color(tcfg.get("ticket_embed_color", tcfg.get("embed_color", "#9B59B6")))
             )
+            if tcfg.get("reason_image") and str(tcfg.get("reason_image")).strip():
+                reason_embed.set_image(url=str(tcfg.get("reason_image")).strip())
             
             # Send both embeds together with buttons (reason will appear between embed and buttons)
             view = TicketControlView(interaction.guild_id, ticket_channel.id, interaction.user.id)
@@ -2883,7 +2929,7 @@ class TicketControlView(discord.ui.View):
         close_style = style_map.get(tcfg.get("buttons", {}).get("close_style", "danger").lower(), discord.ButtonStyle.danger)
         close_btn = discord.ui.Button(
             label=tcfg.get("buttons", {}).get("close", "Close | إغلاق"),
-            emoji=tcfg.get("buttons", {}).get("close_emoji", "🔒"),
+            emoji=_coerce_component_emoji(tcfg.get("buttons", {}).get("close_emoji", "🔒")) or "🔒",
             style=close_style,
             custom_id=f"ticket_close_{channel_id}"
         )
@@ -2894,7 +2940,7 @@ class TicketControlView(discord.ui.View):
         claim_style = style_map.get(tcfg.get("buttons", {}).get("claim_style", "primary").lower(), discord.ButtonStyle.primary)
         claim_btn = discord.ui.Button(
             label=tcfg.get("buttons", {}).get("claim", "Claim | استلام"),
-            emoji=tcfg.get("buttons", {}).get("claim_emoji", "👥"),
+            emoji=_coerce_component_emoji(tcfg.get("buttons", {}).get("claim_emoji", "👥")) or "👥",
             style=claim_style,
             custom_id=f"ticket_claim_{channel_id}"
         )
@@ -2905,7 +2951,7 @@ class TicketControlView(discord.ui.View):
         ping_admin_style = style_map.get(tcfg.get("buttons", {}).get("ping_admin_style", "secondary").lower(), discord.ButtonStyle.secondary)
         ping_admin_btn = discord.ui.Button(
             label=tcfg.get("buttons", {}).get("ping_admin", "Ping Admin | منشن الإدارة"),
-            emoji=tcfg.get("buttons", {}).get("ping_admin_emoji", "📢"),
+            emoji=_coerce_component_emoji(tcfg.get("buttons", {}).get("ping_admin_emoji", "📢")) or "📢",
             style=ping_admin_style,
             custom_id=f"ticket_ping_admin_{channel_id}"
         )
@@ -2916,7 +2962,7 @@ class TicketControlView(discord.ui.View):
         mention_member_style = style_map.get(tcfg.get("buttons", {}).get("mention_member_style", "secondary").lower(), discord.ButtonStyle.secondary)
         mention_member_btn = discord.ui.Button(
             label=tcfg.get("buttons", {}).get("mention_member", "Mention Member | منشن العضو"),
-            emoji=tcfg.get("buttons", {}).get("mention_member_emoji", "👤"),
+            emoji=_coerce_component_emoji(tcfg.get("buttons", {}).get("mention_member_emoji", "👤")) or "👤",
             style=mention_member_style,
             custom_id=f"ticket_mention_member_{channel_id}"
         )
@@ -3113,25 +3159,25 @@ class TicketMenuDropdown(discord.ui.Select):
         options = [
             discord.SelectOption(
                 label=menu_cfg.get("rename", {}).get("label", "Rename | تغيير الاسم"),
-                emoji=menu_cfg.get("rename", {}).get("emoji", "✏️"),
+                emoji=_coerce_component_emoji(menu_cfg.get("rename", {}).get("emoji", "✏️")) or "✏️",
                 description=menu_cfg.get("rename", {}).get("description", "Rename the ticket | تغيير اسم التكيت"),
                 value="rename"
             ),
             discord.SelectOption(
                 label=menu_cfg.get("add_user", {}).get("label", "Add User | إضافة عضو"),
-                emoji=menu_cfg.get("add_user", {}).get("emoji", "👤"),
+                emoji=_coerce_component_emoji(menu_cfg.get("add_user", {}).get("emoji", "👤")) or "👤",
                 description=menu_cfg.get("add_user", {}).get("description", "Add member | إضافة عضو للتكيت"),
                 value="add_user"
             ),
             discord.SelectOption(
                 label=menu_cfg.get("remove_user", {}).get("label", "Remove User | إزالة عضو"),
-                emoji=menu_cfg.get("remove_user", {}).get("emoji", "🚫"),
+                emoji=_coerce_component_emoji(menu_cfg.get("remove_user", {}).get("emoji", "🚫")) or "🚫",
                 description=menu_cfg.get("remove_user", {}).get("description", "Remove member | إزالة عضو من التكيت"),
                 value="remove_user"
             ),
             discord.SelectOption(
                 label=menu_cfg.get("reset", {}).get("label", "Reset | إعادة ضبط"),
-                emoji=menu_cfg.get("reset", {}).get("emoji", "🔄"),
+                emoji=_coerce_component_emoji(menu_cfg.get("reset", {}).get("emoji", "🔄")) or "🔄",
                 description=menu_cfg.get("reset", {}).get("description", "Reset menu | إعادة تعيين القائمة"),
                 value="reset"
             )
@@ -3281,7 +3327,7 @@ async def ticket_panel(interaction: discord.Interaction, channel: discord.TextCh
         embed = discord.Embed(
             title=tcfg.get("panel_title", "🎫 Tickets | التكيت"),
             description=tcfg.get("panel_description", "اختر نوع التكيت من القائمة أدناه | Choose a ticket type below"),
-            color=parse_color(tcfg.get("embed_color", "#9B59B6"))
+            color=parse_color(tcfg.get("panel_embed_color", tcfg.get("embed_color", "#9B59B6")))
         )
         
         # Add main panel image (big image)
@@ -3595,7 +3641,7 @@ class TicketSetupAddOptionModal(discord.ui.Modal):
         super().__init__(title="➕ Add Option | إضافة خيار")
 
         self.label_input = discord.ui.TextInput(label="Label | الاسم", placeholder="Support | دعم", max_length=100)
-        self.emoji_input = discord.ui.TextInput(label="Emoji (opt) | ايموجي", required=False, max_length=20)
+        self.emoji_input = discord.ui.TextInput(label="Emoji (opt) | ايموجي", required=False, max_length=4000)
         self.desc_input = discord.ui.TextInput(
             label="Description (opt) | الوصف",
             required=False,
@@ -3814,7 +3860,7 @@ class AddOptionModal(discord.ui.Modal):
         self.label = discord.ui.TextInput(label="Label | الاسم", placeholder="Technical Support | دعم فني", max_length=100)
         self.add_item(self.label)
         
-        self.emoji = discord.ui.TextInput(label="Emoji | ايموجي", placeholder="🛠️", max_length=50)
+        self.emoji = discord.ui.TextInput(label="Emoji | ايموجي", placeholder="🛠️", max_length=4000)
         self.add_item(self.emoji)
         
         self.description = discord.ui.TextInput(label="Description | الوصف", placeholder="Get help | للحصول على مساعدة", max_length=100)
@@ -3842,7 +3888,7 @@ class EditOptionModal(discord.ui.Modal):
         self.label = discord.ui.TextInput(label="New label | اسم جديد", required=False, max_length=100)
         self.add_item(self.label)
         
-        self.emoji = discord.ui.TextInput(label="New emoji | ايموجي جديد", required=False, max_length=50)
+        self.emoji = discord.ui.TextInput(label="New emoji | ايموجي جديد", required=False, max_length=4000)
         self.add_item(self.emoji)
         
         self.description = discord.ui.TextInput(label="New desc | وصف جديد", required=False, max_length=100)
@@ -4063,7 +4109,7 @@ class EditClaimModal(discord.ui.Modal):
             label="Emoji | ايموجي",
             default=config["tickets"]["messages"].get("claim_emoji", "👥"),
             style=discord.TextStyle.short,
-            max_length=100
+            max_length=4000
         )
         self.add_item(self.claim_emoji)
     
@@ -4092,7 +4138,7 @@ class EditPingAdminModal(discord.ui.Modal):
             label="Emoji | ايموجي",
             default=config["tickets"]["buttons"].get("ping_admin_emoji", "📢"),
             style=discord.TextStyle.short,
-            max_length=100
+            max_length=4000
         )
         self.add_item(self.ping_admin_emoji)
         
@@ -4131,7 +4177,7 @@ class EditMentionMemberModal(discord.ui.Modal):
             label="Emoji | ايموجي",
             default=config["tickets"]["buttons"].get("mention_member_emoji", "👤"),
             style=discord.TextStyle.short,
-            max_length=100
+            max_length=4000
         )
         self.add_item(self.mention_member_emoji)
         
@@ -4170,7 +4216,7 @@ class EditButtonsModal(discord.ui.Modal):
             label="Close emoji | ايموجي الإغلاق",
             default=config["tickets"]["buttons"].get("close_emoji", "🔒"),
             style=discord.TextStyle.short,
-            max_length=100
+            max_length=4000
         )
         self.add_item(self.close_emoji)
         
@@ -4186,7 +4232,7 @@ class EditButtonsModal(discord.ui.Modal):
             label="Claim emoji | ايموجي الاستلام",
             default=config["tickets"]["buttons"].get("claim_emoji", "👥"),
             style=discord.TextStyle.short,
-            max_length=100
+            max_length=4000
         )
         self.add_item(self.claim_btn_emoji)
     
@@ -4225,7 +4271,7 @@ class EditLabelsModal(discord.ui.Modal):
             label="By emoji | ايموجي",
             default=config["tickets"]["messages"].get("by_emoji", "👤"),
             style=discord.TextStyle.short,
-            max_length=100
+            max_length=4000
         )
         self.add_item(self.by_emoji)
     
@@ -4386,7 +4432,7 @@ class MessagesSettingsModal2(discord.ui.Modal):
             label="Claim emoji | ايموجي",
             default=config["tickets"]["messages"].get("claim_emoji", "👥"),
             style=discord.TextStyle.short,
-            max_length=20,
+            max_length=4000,
             required=False
         )
         self.add_item(self.claim_emoji)
@@ -4445,7 +4491,7 @@ class MessagesSettingsModal3(discord.ui.Modal):
             label="Close emoji | ايموجي",
             default=config["tickets"]["buttons"].get("close_emoji", "🔒"),
             style=discord.TextStyle.short,
-            max_length=20,
+            max_length=4000,
             required=False
         )
         self.add_item(self.close_emoji)
@@ -4536,7 +4582,8 @@ class EditMenuOptionModal(discord.ui.Modal):
         self.emoji = discord.ui.TextInput(
             label="Emoji | ايموجي",
             default=menu_cfg.get("emoji", ""),
-            required=False
+            required=False,
+            max_length=4000
         )
         self.add_item(self.emoji)
         

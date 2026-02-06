@@ -292,20 +292,20 @@
                         </div>
 
                         <div class="setting-group">
-                            <div class="setting-group-title">Panel Settings</div>
-                            <label>Panel Title</label>
+                            <div class="setting-group-title">Panel Settings | إعدادات اللوحة</div>
+                            <label>Panel Title | عنوان اللوحة</label>
                             <input type="text" id="panel-title" placeholder="YOUR TITLE HERE" value="{{ config.tickets.panel_title if config.tickets else '' }}">
-                            <label>Panel Description</label>
+                            <label>Panel Description | وصف اللوحة</label>
                             <input type="text" id="panel-description" placeholder="YOUR DESCRIPTION HERE" value="{{ config.tickets.panel_description if config.tickets else '' }}">
-                            <label>Panel Image URL</label>
+                            <label>Panel Image URL | صورة اللوحة</label>
                             <input type="text" id="panel-image" placeholder="https://..." value="{{ config.tickets.panel_image if config.tickets else '' }}">
-                            <label>Panel Author Name</label>
+                            <label>Panel Author Name | اسم الكاتب</label>
                             <input type="text" id="panel-author-name" placeholder="YOUR NAME HERE" value="{{ config.tickets.panel_author_name if config.tickets else '' }}">
-                            <label>Panel Author Icon URL</label>
+                            <label>Panel Author Icon URL | أيقونة الكاتب</label>
                             <input type="text" id="panel-author-icon" placeholder="https://..." value="{{ config.tickets.panel_author_icon if config.tickets else '' }}">
-                            <label>Embed Color</label>
-                            <input type="color" id="ticket-embed-color-picker" value="#{{ config.tickets.embed_color if config.tickets and config.tickets.embed_color else 'FFD700' }}" style="height: 50px; margin-bottom: 10px;">
-                            <input type="text" id="ticket-embed-color" placeholder="FFD700" value="{{ config.tickets.embed_color if config.tickets else 'FFD700' }}">
+                            <label>Panel Embed Color | لون امبد اللوحة</label>
+                            <input type="color" id="panel-embed-color-picker" value="#{{ config.tickets.panel_embed_color if config.tickets and config.tickets.panel_embed_color else (config.tickets.embed_color if config.tickets and config.tickets.embed_color else '9B59B6') }}" style="height: 50px; margin-bottom: 10px;">
+                            <input type="text" id="panel-embed-color" placeholder="#9B59B6" value="{{ config.tickets.panel_embed_color if config.tickets and config.tickets.panel_embed_color else (config.tickets.embed_color if config.tickets and config.tickets.embed_color else '#9B59B6') }}">
                         </div>
 
                         <div class="setting-group">
@@ -317,38 +317,81 @@
                         </div>
 
                         <div class="setting-group">
-                            <div class="setting-group-title">Ticket Messages</div>
-                            <label>Ticket Created Title</label>
+                            <div class="setting-group-title">Ticket Embed (Opened) | امبد فتح التذكرة</div>
+                            <label>Ticket Title | عنوان التذكرة</label>
                             <input type="text" id="ticket-created-title" placeholder="TICKET OPENED" value="{{ config.tickets.messages.ticket_created_title if config.tickets and config.tickets.messages else '' }}">
-                            <label>Ticket Created Description</label>
+                            <label>Ticket Description | وصف التذكرة</label>
                             <input type="text" id="ticket-created-desc" placeholder="YOUR MESSAGE HERE" value="{{ config.tickets.messages.ticket_created_desc if config.tickets and config.tickets.messages else '' }}">
-                            <label>Modal Title</label>
-                            <input type="text" id="modal-title" placeholder="MODAL TITLE HERE" value="{{ config.tickets.messages.modal_title if config.tickets and config.tickets.messages else '' }}">
-                            <label>Modal Placeholder</label>
-                            <input type="text" id="modal-placeholder" placeholder="TYPE REASON HERE..." value="{{ config.tickets.messages.modal_placeholder if config.tickets and config.tickets.messages else '' }}">
-                            <label>Reason Label</label>
-                            <input type="text" id="reason-label" placeholder="REASON:" value="{{ config.tickets.messages.reason_label if config.tickets and config.tickets.messages else '' }}">
-                            <label>Footer Text</label>
-                            <input type="text" id="footer-text" placeholder="YOUR FOOTER • Today at" value="{{ config.tickets.messages.footer_text if config.tickets and config.tickets.messages else '' }}">
-                            <label>Claim Message</label>
-                            <input type="text" id="claim-message" placeholder="@USER استدعى الإدارة" value="{{ config.tickets.messages.claim_message if config.tickets and config.tickets.messages else '' }}">
+                            <label>Ticket Embed Image | صورة امبد التذكرة</label>
+                            <input type="text" id="ticket-image" placeholder="https://..." value="{{ config.tickets.ticket_image if config.tickets else '' }}">
+                            <label>Reason Embed Image | صورة امبد السبب</label>
+                            <input type="text" id="reason-image" placeholder="https://..." value="{{ config.tickets.reason_image if config.tickets else '' }}">
+                            <label>Ticket Embed Color | لون امبد التذكرة</label>
+                            <input type="color" id="ticket-created-embed-color-picker" value="#{{ config.tickets.ticket_embed_color if config.tickets and config.tickets.ticket_embed_color else (config.tickets.embed_color if config.tickets and config.tickets.embed_color else '9B59B6') }}" style="height: 50px; margin-bottom: 10px;">
+                            <input type="text" id="ticket-created-embed-color" placeholder="#9B59B6" value="{{ config.tickets.ticket_embed_color if config.tickets and config.tickets.ticket_embed_color else (config.tickets.embed_color if config.tickets and config.tickets.embed_color else '#9B59B6') }}">
                         </div>
 
                         <div class="setting-group">
-                            <div class="setting-group-title">Button Settings</div>
-                            <label>Close Button Text</label>
+                            <div class="setting-group-title">Ticket Messages | رسائل التذكرة</div>
+                            <label>Modal Title | عنوان المودال</label>
+                            <input type="text" id="modal-title" placeholder="MODAL TITLE HERE" value="{{ config.tickets.messages.modal_title if config.tickets and config.tickets.messages else '' }}">
+                            <label>Modal Placeholder | نص المودال</label>
+                            <input type="text" id="modal-placeholder" placeholder="TYPE REASON HERE..." value="{{ config.tickets.messages.modal_placeholder if config.tickets and config.tickets.messages else '' }}">
+                            <label>Reason Label | اسم السبب</label>
+                            <input type="text" id="reason-label" placeholder="REASON:" value="{{ config.tickets.messages.reason_label if config.tickets and config.tickets.messages else '' }}">
+                            <label>Reason Field Name | عنوان حقل السبب</label>
+                            <input type="text" id="reason-field-name" placeholder="السبب:" value="{{ config.tickets.messages.reason_field_name if config.tickets and config.tickets.messages else '' }}">
+                            <label>By Label | بواسطة</label>
+                            <input type="text" id="by-label" placeholder="بواسطة" value="{{ config.tickets.messages.ticket_by_label if config.tickets and config.tickets.messages else '' }}">
+                            <label>By Emoji | ايموجي بواسطة</label>
+                            <input type="text" id="by-emoji" placeholder="👤" value="{{ config.tickets.messages.by_emoji if config.tickets and config.tickets.messages else '' }}">
+                            <label>Footer Text | نص الفوتر</label>
+                            <input type="text" id="footer-text" placeholder="YOUR FOOTER • Today at" value="{{ config.tickets.messages.footer_text if config.tickets and config.tickets.messages else '' }}">
+                            <label>Claim Message | رسالة الاستدعاء</label>
+                            <input type="text" id="claim-message" placeholder="@USER استدعى الإدارة" value="{{ config.tickets.messages.claim_message if config.tickets and config.tickets.messages else '' }}">
+                            <label>Claim Emoji | ايموجي الاستدعاء</label>
+                            <input type="text" id="claim-emoji" placeholder="👥" value="{{ config.tickets.messages.claim_emoji if config.tickets and config.tickets.messages else '' }}">
+                            <label>Ping Admin Message | رسالة استدعاء الإدارة</label>
+                            <input type="text" id="ping-admin-message" placeholder="تم استدعاء الإدارة @ADMIN" value="{{ config.tickets.messages.ping_admin_message if config.tickets and config.tickets.messages else '' }}">
+                            <label>Mention Member Message | رسالة منشن العضو</label>
+                            <input type="text" id="mention-member-message" placeholder="@MEMBER تفضل" value="{{ config.tickets.messages.mention_member_message if config.tickets and config.tickets.messages else '' }}">
+                        </div>
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Buttons | الأزرار</div>
+                            <label>Close Button Text | نص الإغلاق</label>
                             <input type="text" id="btn-close" placeholder="CLOSE" value="{{ config.tickets.buttons.close if config.tickets and config.tickets.buttons else '' }}">
-                            <label>Close Button Emoji</label>
+                            <label>Close Button Emoji | ايموجي الإغلاق</label>
                             <input type="text" id="btn-close-emoji" placeholder="🔒" value="{{ config.tickets.buttons.close_emoji if config.tickets and config.tickets.buttons else '' }}">
-                            <label>Claim Button Text</label>
+                            <label>Close Button Color | لون الإغلاق (primary/secondary/success/danger)</label>
+                            <input type="text" id="btn-close-style" placeholder="danger" value="{{ config.tickets.buttons.close_style if config.tickets and config.tickets.buttons else '' }}">
+
+                            <label>Claim Button Text | نص الاستلام</label>
                             <input type="text" id="btn-claim" placeholder="CLAIM" value="{{ config.tickets.buttons.claim if config.tickets and config.tickets.buttons else '' }}">
-                            <label>Claim Button Emoji</label>
+                            <label>Claim Button Emoji | ايموجي الاستلام</label>
                             <input type="text" id="btn-claim-emoji" placeholder="👥" value="{{ config.tickets.buttons.claim_emoji if config.tickets and config.tickets.buttons else '' }}">
-                            <label>Rename Button Text</label>
+                            <label>Claim Button Color | لون الاستلام</label>
+                            <input type="text" id="btn-claim-style" placeholder="primary" value="{{ config.tickets.buttons.claim_style if config.tickets and config.tickets.buttons else '' }}">
+
+                            <label>Ping Admin Text | نص زر الاستدعاء</label>
+                            <input type="text" id="btn-ping-admin" placeholder="استدعاء الإدارة" value="{{ config.tickets.buttons.ping_admin if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Ping Admin Emoji | ايموجي الاستدعاء</label>
+                            <input type="text" id="btn-ping-admin-emoji" placeholder="📢" value="{{ config.tickets.buttons.ping_admin_emoji if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Ping Admin Color | لون الاستدعاء</label>
+                            <input type="text" id="btn-ping-admin-style" placeholder="secondary" value="{{ config.tickets.buttons.ping_admin_style if config.tickets and config.tickets.buttons else '' }}">
+
+                            <label>Mention Member Text | نص زر منشن العضو</label>
+                            <input type="text" id="btn-mention-member" placeholder="منشن العضو" value="{{ config.tickets.buttons.mention_member if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Mention Member Emoji | ايموجي منشن العضو</label>
+                            <input type="text" id="btn-mention-member-emoji" placeholder="👤" value="{{ config.tickets.buttons.mention_member_emoji if config.tickets and config.tickets.buttons else '' }}">
+                            <label>Mention Member Color | لون منشن العضو</label>
+                            <input type="text" id="btn-mention-member-style" placeholder="secondary" value="{{ config.tickets.buttons.mention_member_style if config.tickets and config.tickets.buttons else '' }}">
+
+                            <label>Rename Button Text | نص إعادة التسمية</label>
                             <input type="text" id="btn-rename" placeholder="RENAME" value="{{ config.tickets.buttons.rename if config.tickets and config.tickets.buttons else '' }}">
-                            <label>Add User Button Text</label>
+                            <label>Add User Button Text | نص إضافة عضو</label>
                             <input type="text" id="btn-add-user" placeholder="ADD USER" value="{{ config.tickets.buttons.add_user if config.tickets and config.tickets.buttons else '' }}">
-                            <label>Remove User Button Text</label>
+                            <label>Remove User Button Text | نص إزالة عضو</label>
                             <input type="text" id="btn-remove-user" placeholder="REMOVE USER" value="{{ config.tickets.buttons.remove_user if config.tickets and config.tickets.buttons else '' }}">
                         </div>
                         
@@ -551,23 +594,40 @@
                     panel_image: document.getElementById('panel-image').value,
                     panel_author_name: document.getElementById('panel-author-name').value,
                     panel_author_icon: document.getElementById('panel-author-icon').value,
-                    embed_color: document.getElementById('ticket-embed-color').value,
+                    panel_embed_color: document.getElementById('panel-embed-color').value,
+                    ticket_embed_color: document.getElementById('ticket-created-embed-color').value,
                     dropdown_placeholder: document.getElementById('dropdown-placeholder').value,
                     menu_placeholder: document.getElementById('menu-placeholder').value,
+                    ticket_image: document.getElementById('ticket-image').value,
+                    reason_image: document.getElementById('reason-image').value,
                     messages: {
                         ticket_created_title: document.getElementById('ticket-created-title').value,
                         ticket_created_desc: document.getElementById('ticket-created-desc').value,
                         modal_title: document.getElementById('modal-title').value,
                         modal_placeholder: document.getElementById('modal-placeholder').value,
                         reason_label: document.getElementById('reason-label').value,
+                        reason_field_name: document.getElementById('reason-field-name').value,
+                        ticket_by_label: document.getElementById('by-label').value,
+                        by_emoji: document.getElementById('by-emoji').value,
                         footer_text: document.getElementById('footer-text').value,
-                        claim_message: document.getElementById('claim-message').value
+                        claim_message: document.getElementById('claim-message').value,
+                        claim_emoji: document.getElementById('claim-emoji').value,
+                        ping_admin_message: document.getElementById('ping-admin-message').value,
+                        mention_member_message: document.getElementById('mention-member-message').value
                     },
                     buttons: {
                         close: document.getElementById('btn-close').value,
                         close_emoji: document.getElementById('btn-close-emoji').value,
+                        close_style: document.getElementById('btn-close-style').value,
                         claim: document.getElementById('btn-claim').value,
                         claim_emoji: document.getElementById('btn-claim-emoji').value,
+                        claim_style: document.getElementById('btn-claim-style').value,
+                        ping_admin: document.getElementById('btn-ping-admin').value,
+                        ping_admin_emoji: document.getElementById('btn-ping-admin-emoji').value,
+                        ping_admin_style: document.getElementById('btn-ping-admin-style').value,
+                        mention_member: document.getElementById('btn-mention-member').value,
+                        mention_member_emoji: document.getElementById('btn-mention-member-emoji').value,
+                        mention_member_style: document.getElementById('btn-mention-member-style').value,
                         rename: document.getElementById('btn-rename').value,
                         add_user: document.getElementById('btn-add-user').value,
                         remove_user: document.getElementById('btn-remove-user').value
@@ -694,14 +754,23 @@
             }
         });
 
-        document.getElementById('ticket-embed-color-picker').addEventListener('input', (e) => {
-            document.getElementById('ticket-embed-color').value = e.target.value.substring(1);
+        document.getElementById('panel-embed-color-picker').addEventListener('input', (e) => {
+            document.getElementById('panel-embed-color').value = e.target.value;
         });
 
-        document.getElementById('ticket-embed-color').addEventListener('input', (e) => {
-            let color = e.target.value.replace('#', '');
-            if (color.length === 6) {
-                document.getElementById('ticket-embed-color-picker').value = '#' + color;
+        document.getElementById('panel-embed-color').addEventListener('input', (e) => {
+            if (e.target.value.startsWith('#') && e.target.value.length === 7) {
+                document.getElementById('panel-embed-color-picker').value = e.target.value;
+            }
+        });
+
+        document.getElementById('ticket-created-embed-color-picker').addEventListener('input', (e) => {
+            document.getElementById('ticket-created-embed-color').value = e.target.value;
+        });
+
+        document.getElementById('ticket-created-embed-color').addEventListener('input', (e) => {
+            if (e.target.value.startsWith('#') && e.target.value.length === 7) {
+                document.getElementById('ticket-created-embed-color-picker').value = e.target.value;
             }
         });
 
