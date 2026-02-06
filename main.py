@@ -2832,12 +2832,12 @@ class TicketReasonModal(discord.ui.Modal):
             by_emoji = tcfg.get("messages", {}).get("by_emoji", "👤")
             embed.add_field(name=f"{by_emoji} {by_label}", value=interaction.user.mention, inline=False)
             
-            # Use custom footer - only show time
+            # Use custom footer with server name
             footer_text = tcfg.get("messages", {}).get("footer_text", "")
             if footer_text:
-                embed.set_footer(text=f"{footer_text} • {interaction.created_at.strftime('%I:%M %p')}")
+                embed.set_footer(text=f"{footer_text} • {interaction.guild.name}")
             else:
-                embed.set_footer(text=interaction.created_at.strftime('%I:%M %p'))
+                embed.set_footer(text=interaction.guild.name)
             
             # Create reason embed
             reason_field_name = tcfg.get("messages", {}).get("reason_field_name", "REASON:")
@@ -3334,14 +3334,16 @@ async def ticket_panel(interaction: discord.Interaction, channel: discord.TextCh
         if tcfg.get("panel_image") and str(tcfg.get("panel_image")).strip():
             embed.set_image(url=str(tcfg.get("panel_image")).strip())
         
-        # Add small author icon if set
-        if tcfg.get("panel_author_icon") and str(tcfg.get("panel_author_icon")).strip():
-            embed.set_author(
-                name=tcfg.get("panel_author_name", "Ticket System"),
-                icon_url=str(tcfg.get("panel_author_icon")).strip()
-            )
-        
-        embed.timestamp = discord.utils.utcnow()
+        # Add author if name is set (icon optional)
+        author_name = str(tcfg.get("panel_author_name", "")).strip()
+        author_icon = str(tcfg.get("panel_author_icon", "")).strip()
+        if author_name:
+            if author_icon:
+                embed.set_author(name=author_name, icon_url=author_icon)
+            else:
+                embed.set_author(name=author_name)
+
+        embed.set_footer(text=interaction.guild.name)
         
         # Send with dropdown
         view = TicketDropdownView(interaction.guild_id)
@@ -3652,10 +3654,8 @@ class TicketSetupPanelModal1(discord.ui.Modal):
             tcfg["panel_embed_color"] = self.color_input.value.strip()
         if self.panel_image.value.strip():
             tcfg["panel_image"] = self.panel_image.value.strip()
-        if self.panel_author_name.value.strip():
-            tcfg["panel_author_name"] = self.panel_author_name.value.strip()
-        if self.panel_author_icon.value.strip():
-            tcfg["panel_author_icon"] = self.panel_author_icon.value.strip()
+        tcfg["panel_author_name"] = self.panel_author_name.value.strip()
+        tcfg["panel_author_icon"] = self.panel_author_icon.value.strip()
         update_guild_config(self.guild_id, {"tickets": tcfg})
         await interaction.response.send_message(
             "✅ Saved (1/2) | تم الحفظ (1/2)",
@@ -3695,8 +3695,7 @@ class TicketSetupPanelModal2(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         tcfg = get_ticket_config(self.guild_id)
-        if self.panel_author_icon.value.strip():
-            tcfg["panel_author_icon"] = self.panel_author_icon.value.strip()
+        tcfg["panel_author_icon"] = self.panel_author_icon.value.strip()
         if self.dropdown_ph.value.strip():
             tcfg["dropdown_placeholder"] = self.dropdown_ph.value.strip()
         if self.menu_ph.value.strip():
