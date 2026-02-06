@@ -3482,7 +3482,7 @@ def _build_ticket_setup_embed(guild: discord.Guild, tcfg: dict) -> discord.Embed
 
 class NextModalView(discord.ui.View):
     def __init__(self, label: str, modal_factory):
-        super().__init__(timeout=120)
+        super().__init__(timeout=300)
         self._label = label
         self._modal_factory = modal_factory
 
@@ -3493,44 +3493,98 @@ class NextModalView(discord.ui.View):
 
 class TicketSetupPanelView(discord.ui.View):
     def __init__(self, guild_id: int):
-        super().__init__(timeout=180)
+        super().__init__(timeout=None)
         self.guild_id = int(guild_id)
 
     @discord.ui.button(label="Panel | اللوحة", emoji="🎨", style=discord.ButtonStyle.primary, row=0)
     async def panel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(TicketSetupPanelModal1(self.guild_id))
+        try:
+            await interaction.response.send_modal(TicketSetupPanelModal1(self.guild_id))
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
     @discord.ui.button(label="Channels | القنوات", emoji="📁", style=discord.ButtonStyle.primary, row=0)
     async def channels(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(TicketSetupChannelsModal(self.guild_id))
+        try:
+            await interaction.response.send_modal(TicketSetupChannelsModal(self.guild_id))
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
     @discord.ui.button(label="Roles | الأدوار", emoji="👥", style=discord.ButtonStyle.primary, row=0)
     async def roles(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(TicketSetupRolesModal(self.guild_id))
+        try:
+            await interaction.response.send_modal(TicketSetupRolesModal(self.guild_id))
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
     @discord.ui.button(label="Add Option | إضافة خيار", emoji="➕", style=discord.ButtonStyle.success, row=1)
     async def add_option(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(TicketSetupAddOptionModal(self.guild_id))
+        try:
+            await interaction.response.send_modal(TicketSetupAddOptionModal(self.guild_id))
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
     @discord.ui.button(label="Remove Option | حذف خيار", emoji="🗑️", style=discord.ButtonStyle.danger, row=1)
     async def remove_option(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(TicketSetupRemoveOptionModal(self.guild_id))
+        try:
+            await interaction.response.send_modal(TicketSetupRemoveOptionModal(self.guild_id))
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
     @discord.ui.button(label="Messages | الرسائل", emoji="📝", style=discord.ButtonStyle.primary, row=2)
     async def messages(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(TicketSetupMessagesModal1(self.guild_id))
+        try:
+            await interaction.response.send_modal(TicketSetupMessagesModal1(self.guild_id))
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
     @discord.ui.button(label="Buttons | الأزرار", emoji="🔘", style=discord.ButtonStyle.primary, row=2)
     async def buttons(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(TicketSetupButtonsModal1(self.guild_id))
+        try:
+            await interaction.response.send_modal(TicketSetupButtonsModal1(self.guild_id))
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
     @discord.ui.button(label="Embeds | الإمبد", emoji="🎨", style=discord.ButtonStyle.secondary, row=2)
     async def embeds(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(TicketSetupEmbedsModal(self.guild_id))
+        try:
+            await interaction.response.send_modal(TicketSetupEmbedsModal(self.guild_id))
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
     @discord.ui.button(label="Menu | القائمة", emoji="🎛️", style=discord.ButtonStyle.secondary, row=3)
     async def menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(TicketSetupMenuModal(self.guild_id))
+        try:
+            await interaction.response.send_modal(TicketSetupMenuModal(self.guild_id))
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
     @discord.ui.button(label="Refresh | تحديث", emoji="🔄", style=discord.ButtonStyle.secondary, row=1)
     async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
