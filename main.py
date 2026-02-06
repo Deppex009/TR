@@ -3480,6 +3480,17 @@ def _build_ticket_setup_embed(guild: discord.Guild, tcfg: dict) -> discord.Embed
     return embed
 
 
+class NextModalView(discord.ui.View):
+    def __init__(self, label: str, modal_factory):
+        super().__init__(timeout=120)
+        self._label = label
+        self._modal_factory = modal_factory
+
+    @discord.ui.button(label="Next | التالي", style=discord.ButtonStyle.primary)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(self._modal_factory())
+
+
 class TicketSetupPanelView(discord.ui.View):
     def __init__(self, guild_id: int):
         super().__init__(timeout=180)
@@ -3588,7 +3599,11 @@ class TicketSetupPanelModal1(discord.ui.Modal):
         if self.panel_author_icon.value.strip():
             tcfg["panel_author_icon"] = self.panel_author_icon.value.strip()
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_modal(TicketSetupPanelModal2(self.guild_id))
+        await interaction.response.send_message(
+            "✅ Saved (1/2) | تم الحفظ (1/2)",
+            ephemeral=True,
+            view=NextModalView("Next | التالي", lambda: TicketSetupPanelModal2(self.guild_id)),
+        )
 
 
 class TicketSetupPanelModal2(discord.ui.Modal):
@@ -3728,7 +3743,11 @@ class TicketSetupMessagesModal1(discord.ui.Modal):
 
         tcfg["messages"] = msg
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_modal(TicketSetupMessagesModal2(self.guild_id))
+        await interaction.response.send_message(
+            "✅ Saved (1/3) | تم الحفظ (1/3)",
+            ephemeral=True,
+            view=NextModalView("Next | التالي", lambda: TicketSetupMessagesModal2(self.guild_id)),
+        )
 
 
 class TicketSetupMessagesModal2(discord.ui.Modal):
@@ -3792,7 +3811,11 @@ class TicketSetupMessagesModal2(discord.ui.Modal):
 
         tcfg["messages"] = msg
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_modal(TicketSetupMessagesModal3(self.guild_id))
+        await interaction.response.send_message(
+            "✅ Saved (2/3) | تم الحفظ (2/3)",
+            ephemeral=True,
+            view=NextModalView("Next | التالي", lambda: TicketSetupMessagesModal3(self.guild_id)),
+        )
 
 
 class TicketSetupMessagesModal3(discord.ui.Modal):
@@ -3902,7 +3925,11 @@ class TicketSetupButtonsModal1(discord.ui.Modal):
 
         tcfg["buttons"] = btn
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_modal(TicketSetupButtonsModal2(self.guild_id))
+        await interaction.response.send_message(
+            "✅ Saved (1/3) | تم الحفظ (1/3)",
+            ephemeral=True,
+            view=NextModalView("Next | التالي", lambda: TicketSetupButtonsModal2(self.guild_id)),
+        )
 
 
 class TicketSetupButtonsModal2(discord.ui.Modal):
@@ -3966,7 +3993,11 @@ class TicketSetupButtonsModal2(discord.ui.Modal):
 
         tcfg["buttons"] = btn
         update_guild_config(self.guild_id, {"tickets": tcfg})
-        await interaction.response.send_modal(TicketSetupButtonsModal3(self.guild_id))
+        await interaction.response.send_message(
+            "✅ Saved (2/3) | تم الحفظ (2/3)",
+            ephemeral=True,
+            view=NextModalView("Next | التالي", lambda: TicketSetupButtonsModal3(self.guild_id)),
+        )
 
 
 class TicketSetupButtonsModal3(discord.ui.Modal):
