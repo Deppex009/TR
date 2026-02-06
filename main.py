@@ -3528,6 +3528,10 @@ class TicketSetupPanelView(discord.ui.View):
     async def embeds(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(TicketSetupEmbedsModal(self.guild_id))
 
+    @discord.ui.button(label="Menu | القائمة", emoji="🎛️", style=discord.ButtonStyle.secondary, row=3)
+    async def menu(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketSetupMenuModal(self.guild_id))
+
     @discord.ui.button(label="Refresh | تحديث", emoji="🔄", style=discord.ButtonStyle.secondary, row=1)
     async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
         tcfg = get_ticket_config(self.guild_id)
@@ -4077,6 +4081,76 @@ class TicketSetupEmbedsModal(discord.ui.Modal):
 
         update_guild_config(self.guild_id, {"tickets": tcfg})
         await interaction.response.send_message("✅ Updated | تم تحديث الإمبد", ephemeral=True)
+
+
+class TicketSetupMenuModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        self.guild_id = int(guild_id)
+        tcfg = get_ticket_config(self.guild_id)
+        super().__init__(title="🎛️ Menu Options | خيارات القائمة")
+
+        self.option_key = discord.ui.TextInput(
+            label="Option key | المفتاح (rename/add_user/remove_user/reset)",
+            placeholder="rename",
+            max_length=20,
+            required=True,
+        )
+        self.label = discord.ui.TextInput(
+            label="Label | الاسم",
+            default="",
+            max_length=256,
+            required=False,
+        )
+        self.emoji = discord.ui.TextInput(
+            label="Emoji | ايموجي",
+            default="",
+            max_length=4000,
+            required=False,
+        )
+        self.description = discord.ui.TextInput(
+            label="Description | الوصف",
+            default="",
+            max_length=4000,
+            required=False,
+        )
+
+        self.add_item(self.option_key)
+        self.add_item(self.label)
+        self.add_item(self.emoji)
+        self.add_item(self.description)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        tcfg = get_ticket_config(self.guild_id)
+        menu = tcfg.get("menu_options", {})
+
+        raw_key = self.option_key.value.strip().lower()
+        key_map = {
+            "rename": "rename",
+            "add_user": "add_user",
+            "add": "add_user",
+            "remove_user": "remove_user",
+            "remove": "remove_user",
+            "reset": "reset",
+        }
+        key = key_map.get(raw_key)
+        if not key:
+            return await interaction.response.send_message(
+                "❌ Invalid key | مفتاح غير صحيح",
+                ephemeral=True,
+            )
+
+        current = menu.get(key, {})
+        if self.label.value.strip():
+            current["label"] = self.label.value.strip()
+        if self.emoji.value.strip():
+            current["emoji"] = self.emoji.value.strip()
+        if self.description.value.strip():
+            current["description"] = self.description.value.strip()
+
+        menu[key] = current
+        tcfg["menu_options"] = menu
+        update_guild_config(self.guild_id, {"tickets": tcfg})
+        await interaction.response.send_message("✅ Updated | تم تحديث خيارات القائمة", ephemeral=True)
 
 
 class TicketSetupRolesModal(discord.ui.Modal):
