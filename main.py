@@ -4144,7 +4144,7 @@ class TicketSetupMenuModal(discord.ui.Modal):
         super().__init__(title="🎛️ Menu Options | خيارات القائمة")
 
         self.option_key = discord.ui.TextInput(
-            label="Option key | المفتاح (rename/add_user/remove_user/reset)",
+            label="Key | المفتاح (rename/add/remove/reset)",
             placeholder="rename",
             max_length=20,
             required=True,
@@ -4162,7 +4162,7 @@ class TicketSetupMenuModal(discord.ui.Modal):
             required=False,
         )
         self.description = discord.ui.TextInput(
-            label="Description | الوصف",
+            label="Desc | الوصف",
             default="",
             max_length=4000,
             required=False,
