@@ -1235,6 +1235,8 @@ def get_giveaway_config(guild_id: int) -> dict:
         "end_line_template": "Winner(s): {winners} • Ends: {ends_at} | الفائزون: {winners} • ينتهي: {ends_at}",
         "ended_line_template": "Winner(s): {winners} • Ended: {ended_at} | الفائزون: {winners} • انتهى: {ended_at}",
         "winners_line_template": "Winners: {winner_mentions} | الفائزون: {winner_mentions}",
+        "winners_announcement_template": "🎉 **Winners | الفائزون:** {winner_mentions}\n**Prize | الجائزة:** {prize}",
+        "no_winner_announcement_template": "❌ No valid entries | لا توجد مشاركات صحيحة\n**Prize | الجائزة:** {prize}",
         "active": [],
     }
 
@@ -1300,8 +1302,8 @@ def build_giveaway_embed(
     reaction = giveaway_cfg.get("reaction_emoji", "🎉")
     title = _safe_format(giveaway_cfg.get("title_template"), guild=guild.name)
 
-    ends_at = f"<t:{int(end_ts)}:F> (<t:{int(end_ts)}:R>)"
-    ended_at = f"<t:{int(end_ts)}:F>"
+    ends_at = f"<t:{int(end_ts)}:R>"
+    ended_at = f"<t:{int(end_ts)}:R>"
 
     react_line = _safe_format(giveaway_cfg.get("react_line_template"), reaction=reaction)
     prize_line = _safe_format(giveaway_cfg.get("prize_line_template"), prize=prize)
@@ -1320,13 +1322,23 @@ def build_giveaway_embed(
             ends_at=ends_at,
         )
 
-    lines = [react_line, prize_line, host_line, "", end_line]
+    lines: list[str] = []
+    for line in (react_line, prize_line, host_line):
+        if str(line).strip():
+            lines.append(str(line))
+
+    if str(end_line).strip():
+        if lines:
+            lines.append("")
+        lines.append(str(end_line))
+
     if ended:
         winners_line = _safe_format(
             giveaway_cfg.get("winners_line_template"),
             winner_mentions=(winner_mentions or "—"),
         )
-        lines += [winners_line]
+        if str(winners_line).strip():
+            lines.append(str(winners_line))
 
     embed = discord.Embed(
         title=title,
@@ -1415,15 +1427,19 @@ async def _giveaway_end_one(guild_id: int, record: dict):
 
     try:
         if winners_ids:
-            await channel.send(
-                f"🎉 **Winners | الفائزون:** {winner_mentions}\n"
-                f"**Prize | الجائزة:** {prize}"
+            template = giveaway_cfg.get(
+                "winners_announcement_template",
+                "🎉 **Winners | الفائزون:** {winner_mentions}\n**Prize | الجائزة:** {prize}",
             )
+            msg = _safe_format(template, winner_mentions=winner_mentions, prize=prize)
+            await channel.send(msg)
         else:
-            await channel.send(
-                f"❌ No valid entries | لا توجد مشاركات صحيحة\n"
-                f"**Prize | الجائزة:** {prize}"
+            template = giveaway_cfg.get(
+                "no_winner_announcement_template",
+                "❌ No valid entries | لا توجد مشاركات صحيحة\n**Prize | الجائزة:** {prize}",
             )
+            msg = _safe_format(template, prize=prize)
+            await channel.send(msg)
     except Exception:
         pass
 
@@ -1545,54 +1561,96 @@ class GiveawayReactionEmojiModal(discord.ui.Modal, title="Reaction Emoji | اي�
         await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
 
 
-class GiveawayTemplatesModal(discord.ui.Modal, title="Templates | التنسيق"):
-    title_template = discord.ui.TextInput(
-        label="Title | العنوان",
-        default="🎁 {guild} Giveaways | سحوبات {guild}",
-        required=False,
-        max_length=200,
-    )
-    react_line = discord.ui.TextInput(
-        label="React line | سطر التفاعل",
-        default="✨ React With {reaction} To Enter | تفاعل بـ {reaction} للدخول",
-        style=discord.TextStyle.paragraph,
-        required=False,
-        max_length=400,
-    )
-    prize_line = discord.ui.TextInput(
-        label="Prize line | سطر الجائزة",
-        default="🎁 Prize : {prize} | الجائزة : {prize}",
-        style=discord.TextStyle.paragraph,
-        required=False,
-        max_length=400,
-    )
-    host_line = discord.ui.TextInput(
-        label="Host line | سطر المستضيف",
-        default="👑 Hosted By : {host} | المستضيف : {host}",
-        style=discord.TextStyle.paragraph,
-        required=False,
-        max_length=400,
-    )
-    end_line = discord.ui.TextInput(
-        label="End line | سطر النهاية",
-        default="Winner(s): {winners} • Ends: {ends_at} | الفائزون: {winners} • ينتهي: {ends_at}",
-        style=discord.TextStyle.paragraph,
-        required=False,
-        max_length=400,
-    )
+class GiveawayTemplatesModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Templates | التنسيق")
+        self.guild_id = int(guild_id)
+        gw = get_giveaway_config(self.guild_id)
+
+        self.title_template = discord.ui.TextInput(
+            label="Title | العنوان",
+            default=str(gw.get("title_template", ""))[:200],
+            required=False,
+            max_length=200,
+        )
+        self.react_line = discord.ui.TextInput(
+            label="React line | سطر التفاعل",
+            default=str(gw.get("react_line_template", ""))[:400],
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=400,
+        )
+        self.prize_line = discord.ui.TextInput(
+            label="Prize line | سطر الجائزة",
+            default=str(gw.get("prize_line_template", ""))[:400],
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=400,
+        )
+        self.host_line = discord.ui.TextInput(
+            label="Host line | سطر المستضيف",
+            default=str(gw.get("host_line_template", ""))[:400],
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=400,
+        )
+        self.end_line = discord.ui.TextInput(
+            label="End line (optional) | سطر النهاية (اختياري)",
+            default=str(gw.get("end_line_template", ""))[:400],
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=400,
+        )
+        self.ended_line = discord.ui.TextInput(
+            label="Ended line (optional) | سطر انتهاء السحب (اختياري)",
+            default=str(gw.get("ended_line_template", ""))[:400],
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=400,
+        )
+        self.winners_line = discord.ui.TextInput(
+            label="Winners line (optional) | سطر الفائزين (اختياري)",
+            default=str(gw.get("winners_line_template", ""))[:400],
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=400,
+        )
+        self.winners_announcement = discord.ui.TextInput(
+            label="Winner message | رسالة الفائزين",
+            default=str(gw.get("winners_announcement_template", ""))[:1500],
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=1500,
+        )
+        self.no_winner_announcement = discord.ui.TextInput(
+            label="No-winner message | رسالة عدم وجود فائز",
+            default=str(gw.get("no_winner_announcement_template", ""))[:1500],
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=1500,
+        )
+
+        self.add_item(self.title_template)
+        self.add_item(self.react_line)
+        self.add_item(self.prize_line)
+        self.add_item(self.host_line)
+        self.add_item(self.end_line)
+        self.add_item(self.ended_line)
+        self.add_item(self.winners_line)
+        self.add_item(self.winners_announcement)
+        self.add_item(self.no_winner_announcement)
 
     async def on_submit(self, interaction: discord.Interaction):
         gw = get_giveaway_config(interaction.guild_id)
-        if str(self.title_template.value or "").strip():
-            gw["title_template"] = str(self.title_template.value)
-        if str(self.react_line.value or "").strip():
-            gw["react_line_template"] = str(self.react_line.value)
-        if str(self.prize_line.value or "").strip():
-            gw["prize_line_template"] = str(self.prize_line.value)
-        if str(self.host_line.value or "").strip():
-            gw["host_line_template"] = str(self.host_line.value)
-        if str(self.end_line.value or "").strip():
-            gw["end_line_template"] = str(self.end_line.value)
+        gw["title_template"] = str(self.title_template.value or "")
+        gw["react_line_template"] = str(self.react_line.value or "")
+        gw["prize_line_template"] = str(self.prize_line.value or "")
+        gw["host_line_template"] = str(self.host_line.value or "")
+        gw["end_line_template"] = str(self.end_line.value or "")
+        gw["ended_line_template"] = str(self.ended_line.value or "")
+        gw["winners_line_template"] = str(self.winners_line.value or "")
+        gw["winners_announcement_template"] = str(self.winners_announcement.value or "")
+        gw["no_winner_announcement_template"] = str(self.no_winner_announcement.value or "")
         update_guild_config(interaction.guild_id, {"giveaway": gw})
         await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
 
@@ -1741,7 +1799,7 @@ class GiveawaySettingsView(discord.ui.View):
     async def templates_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
-        await interaction.response.send_modal(GiveawayTemplatesModal())
+        await interaction.response.send_modal(GiveawayTemplatesModal(interaction.guild_id))
 
     @discord.ui.button(label="Embed | إيمبد", style=discord.ButtonStyle.secondary, row=1)
     async def embed_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
