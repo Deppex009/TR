@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Deploy marker (helps confirm Discloud pulled latest code)
-DEPLOY_MARKER = "2026-02-05T00:00Z"
+DEPLOY_MARKER = "2026-02-07T00:00Z"
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -5625,7 +5625,9 @@ async def lock_channel(interaction: discord.Interaction, channel: discord.TextCh
             )
         
         channel = channel or interaction.channel
-        await channel.set_permissions(interaction.guild.default_role, send_messages=False, reason=reason)
+        overwrite = channel.overwrites_for(interaction.guild.default_role)
+        overwrite.send_messages = False
+        await channel.set_permissions(interaction.guild.default_role, overwrite=overwrite, reason=reason)
 
         embed = discord.Embed(
             title="🔒 تم قفل القناة | Channel Locked",
@@ -5653,7 +5655,9 @@ async def unlock_channel(interaction: discord.Interaction, channel: discord.Text
             )
         
         channel = channel or interaction.channel
-        await channel.set_permissions(interaction.guild.default_role, send_messages=True, reason=reason)
+        overwrite = channel.overwrites_for(interaction.guild.default_role)
+        overwrite.send_messages = None
+        await channel.set_permissions(interaction.guild.default_role, overwrite=overwrite, reason=reason)
         
         embed = discord.Embed(
             title="🔓 تم فتح القناة | Channel Unlocked",
@@ -6324,7 +6328,9 @@ async def on_message(message):
                         reason = message.content[len(shortcut):].strip() or "No reason provided"
 
                         if action == "lock":
-                            await channel.set_permissions(message.guild.default_role, send_messages=False, reason=reason)
+                            overwrite = channel.overwrites_for(message.guild.default_role)
+                            overwrite.send_messages = False
+                            await channel.set_permissions(message.guild.default_role, overwrite=overwrite, reason=reason)
                             embed = discord.Embed(
                                 title="🔒 تم قفل القناة | Channel Locked",
                                 description=f"{channel.mention} **تم قفلها**\n**السبب:** {reason}\n\n{channel.mention} **has been locked**\n**Reason:** {reason}",
@@ -6333,7 +6339,9 @@ async def on_message(message):
                             await message.channel.send(embed=embed, delete_after=10)
                             await send_mod_log(message.guild, "channel_locked", message.author, channel, reason)
                         else:
-                            await channel.set_permissions(message.guild.default_role, send_messages=True, reason=reason)
+                            overwrite = channel.overwrites_for(message.guild.default_role)
+                            overwrite.send_messages = None
+                            await channel.set_permissions(message.guild.default_role, overwrite=overwrite, reason=reason)
                             embed = discord.Embed(
                                 title="🔓 تم فتح القناة | Channel Unlocked",
                                 description=f"{channel.mention} **تم فتحها**\n**السبب:** {reason}\n\n{channel.mention} **has been unlocked**\n**Reason:** {reason}",
