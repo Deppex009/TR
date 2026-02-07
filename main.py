@@ -1630,14 +1630,14 @@ class GiveawayTemplatesModal2(discord.ui.Modal):
         gw = get_giveaway_config(self.guild_id)
 
         self.ended_line = discord.ui.TextInput(
-            label="Ended line (optional) | سطر انتهاء السحب (اختياري)",
+            label="Ended line | سطر الانتهاء",
             default=str(gw.get("ended_line_template", ""))[:400],
             style=discord.TextStyle.paragraph,
             required=False,
             max_length=400,
         )
         self.winners_line = discord.ui.TextInput(
-            label="Winners line (optional) | سطر الفائزين (اختياري)",
+            label="Winners line | سطر الفائزين",
             default=str(gw.get("winners_line_template", ""))[:400],
             style=discord.TextStyle.paragraph,
             required=False,
@@ -1651,7 +1651,7 @@ class GiveawayTemplatesModal2(discord.ui.Modal):
             max_length=1500,
         )
         self.no_winner_announcement = discord.ui.TextInput(
-            label="No-winner message | رسالة عدم وجود فائز",
+            label="No-winner message | رسالة بدون فائز",
             default=str(gw.get("no_winner_announcement_template", ""))[:1500],
             style=discord.TextStyle.paragraph,
             required=False,
