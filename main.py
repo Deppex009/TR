@@ -6336,7 +6336,7 @@ async def on_message(message):
                                 description=f"{channel.mention} **تم قفلها**\n**السبب:** {reason}\n\n{channel.mention} **has been locked**\n**Reason:** {reason}",
                                 color=discord.Color.red(),
                             )
-                            await message.channel.send(embed=embed, delete_after=10)
+                            await message.channel.send(embed=embed)
                             await send_mod_log(message.guild, "channel_locked", message.author, channel, reason)
                         else:
                             overwrite = channel.overwrites_for(message.guild.default_role)
@@ -6347,7 +6347,7 @@ async def on_message(message):
                                 description=f"{channel.mention} **تم فتحها**\n**السبب:** {reason}\n\n{channel.mention} **has been unlocked**\n**Reason:** {reason}",
                                 color=discord.Color.green(),
                             )
-                            await message.channel.send(embed=embed, delete_after=10)
+                            await message.channel.send(embed=embed)
                             await send_mod_log(message.guild, "channel_unlocked", message.author, channel, reason)
 
                         try:
