@@ -1561,9 +1561,9 @@ class GiveawayReactionEmojiModal(discord.ui.Modal, title="Reaction Emoji | اي�
         await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
 
 
-class GiveawayTemplatesModal(discord.ui.Modal):
+class GiveawayTemplatesModal1(discord.ui.Modal):
     def __init__(self, guild_id: int):
-        super().__init__(title="Templates | التنسيق")
+        super().__init__(title="Templates | التنسيق (1/2)")
         self.guild_id = int(guild_id)
         gw = get_giveaway_config(self.guild_id)
 
@@ -1601,6 +1601,34 @@ class GiveawayTemplatesModal(discord.ui.Modal):
             required=False,
             max_length=400,
         )
+
+        self.add_item(self.title_template)
+        self.add_item(self.react_line)
+        self.add_item(self.prize_line)
+        self.add_item(self.host_line)
+        self.add_item(self.end_line)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        gw = get_giveaway_config(interaction.guild_id)
+        gw["title_template"] = str(self.title_template.value or "")
+        gw["react_line_template"] = str(self.react_line.value or "")
+        gw["prize_line_template"] = str(self.prize_line.value or "")
+        gw["host_line_template"] = str(self.host_line.value or "")
+        gw["end_line_template"] = str(self.end_line.value or "")
+        update_guild_config(interaction.guild_id, {"giveaway": gw})
+        await interaction.response.send_message(
+            "✅ Saved (1/2) | تم الحفظ (1/2)",
+            ephemeral=True,
+            view=NextModalView("Next | التالي", lambda: GiveawayTemplatesModal2(self.guild_id)),
+        )
+
+
+class GiveawayTemplatesModal2(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Templates | التنسيق (2/2)")
+        self.guild_id = int(guild_id)
+        gw = get_giveaway_config(self.guild_id)
+
         self.ended_line = discord.ui.TextInput(
             label="Ended line (optional) | سطر انتهاء السحب (اختياري)",
             default=str(gw.get("ended_line_template", ""))[:400],
@@ -1630,11 +1658,6 @@ class GiveawayTemplatesModal(discord.ui.Modal):
             max_length=1500,
         )
 
-        self.add_item(self.title_template)
-        self.add_item(self.react_line)
-        self.add_item(self.prize_line)
-        self.add_item(self.host_line)
-        self.add_item(self.end_line)
         self.add_item(self.ended_line)
         self.add_item(self.winners_line)
         self.add_item(self.winners_announcement)
@@ -1642,11 +1665,6 @@ class GiveawayTemplatesModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         gw = get_giveaway_config(interaction.guild_id)
-        gw["title_template"] = str(self.title_template.value or "")
-        gw["react_line_template"] = str(self.react_line.value or "")
-        gw["prize_line_template"] = str(self.prize_line.value or "")
-        gw["host_line_template"] = str(self.host_line.value or "")
-        gw["end_line_template"] = str(self.end_line.value or "")
         gw["ended_line_template"] = str(self.ended_line.value or "")
         gw["winners_line_template"] = str(self.winners_line.value or "")
         gw["winners_announcement_template"] = str(self.winners_announcement.value or "")
@@ -1799,7 +1817,7 @@ class GiveawaySettingsView(discord.ui.View):
     async def templates_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
-        await interaction.response.send_modal(GiveawayTemplatesModal(interaction.guild_id))
+        await interaction.response.send_modal(GiveawayTemplatesModal1(interaction.guild_id))
 
     @discord.ui.button(label="Embed | إيمبد", style=discord.ButtonStyle.secondary, row=1)
     async def embed_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
