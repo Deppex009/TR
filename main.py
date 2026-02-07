@@ -331,6 +331,18 @@ def get_ticket_config(guild_id: int):
 
     return tcfg
 
+
+def _get_ticket_owner_id_from_channel(channel: discord.abc.GuildChannel) -> int | None:
+    """Extract ticket owner id from channel topic."""
+    try:
+        topic = (getattr(channel, "topic", "") or "").strip()
+        if topic.startswith("ticket_owner:"):
+            raw = topic.split("ticket_owner:", 1)[1].strip().split()[0]
+            return int(raw)
+    except Exception:
+        pass
+    return None
+
 config = load_config()
 
 # Helper function to convert color name to hex
@@ -2331,6 +2343,7 @@ async def on_ready():
         if not getattr(bot, "_persistent_views_added", False):
             bot.add_view(ModSettingsView())
             bot.add_view(GiveawayOpenFormView())
+            bot.add_view(TicketControlPersistentView())
             bot._persistent_views_added = True
 
         await bot.tree.sync()
@@ -2804,7 +2817,8 @@ class TicketReasonModal(discord.ui.Modal):
             ticket_channel = await guild.create_text_channel(
                 name=channel_name,
                 category=category,
-                overwrites=overwrites
+                overwrites=overwrites,
+                topic=f"ticket_owner:{interaction.user.id}",
             )
             
             # Create mention string for ping roles
@@ -2908,7 +2922,7 @@ class TicketControlView(discord.ui.View):
         super().__init__(timeout=None)
         self.guild_id = int(guild_id)
         self.channel_id = channel_id
-        self.owner_id = owner_id
+        self.owner_id = int(owner_id) if owner_id else None
 
         tcfg = get_ticket_config(self.guild_id)
         
@@ -2931,7 +2945,7 @@ class TicketControlView(discord.ui.View):
             label=tcfg.get("buttons", {}).get("close", "Close | إغلاق"),
             emoji=_coerce_component_emoji(tcfg.get("buttons", {}).get("close_emoji", "🔒")) or "🔒",
             style=close_style,
-            custom_id=f"ticket_close_{channel_id}"
+            custom_id="ticket_close"
         )
         close_btn.callback = self.close_ticket
         self.add_item(close_btn)
@@ -2942,7 +2956,7 @@ class TicketControlView(discord.ui.View):
             label=tcfg.get("buttons", {}).get("claim", "Claim | استلام"),
             emoji=_coerce_component_emoji(tcfg.get("buttons", {}).get("claim_emoji", "👥")) or "👥",
             style=claim_style,
-            custom_id=f"ticket_claim_{channel_id}"
+            custom_id="ticket_claim"
         )
         claim_btn.callback = self.claim_ticket
         self.add_item(claim_btn)
@@ -2953,7 +2967,7 @@ class TicketControlView(discord.ui.View):
             label=tcfg.get("buttons", {}).get("ping_admin", "Ping Admin | منشن الإدارة"),
             emoji=_coerce_component_emoji(tcfg.get("buttons", {}).get("ping_admin_emoji", "📢")) or "📢",
             style=ping_admin_style,
-            custom_id=f"ticket_ping_admin_{channel_id}"
+            custom_id="ticket_ping_admin"
         )
         ping_admin_btn.callback = self.ping_admin
         self.add_item(ping_admin_btn)
@@ -2964,7 +2978,7 @@ class TicketControlView(discord.ui.View):
             label=tcfg.get("buttons", {}).get("mention_member", "Mention Member | منشن العضو"),
             emoji=_coerce_component_emoji(tcfg.get("buttons", {}).get("mention_member_emoji", "👤")) or "👤",
             style=mention_member_style,
-            custom_id=f"ticket_mention_member_{channel_id}"
+            custom_id="ticket_mention_member"
         )
         mention_member_btn.callback = self.mention_member
         self.add_item(mention_member_btn)
@@ -3028,7 +3042,8 @@ class TicketControlView(discord.ui.View):
                 return
             
             # Get ticket owner
-            owner = interaction.guild.get_member(self.owner_id)
+            owner_id = self.owner_id or _get_ticket_owner_id_from_channel(interaction.channel)
+            owner = interaction.guild.get_member(owner_id) if owner_id else None
             if owner:
                 # Get custom message
                 tcfg = get_ticket_config(interaction.guild_id)
@@ -3146,6 +3161,88 @@ class TicketControlView(discord.ui.View):
         except Exception as e:
             logger.error(f"Error logging ticket action: {e}")
 
+
+class TicketMenuPersistentSelect(discord.ui.Select):
+    """Persistent select to handle ticket menu interactions after restarts."""
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Rename", value="rename"),
+            discord.SelectOption(label="Add User", value="add_user"),
+            discord.SelectOption(label="Remove User", value="remove_user"),
+            discord.SelectOption(label="Reset", value="reset"),
+        ]
+        super().__init__(
+            placeholder="Edit Ticket",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="ticket_menu",
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            owner_id = _get_ticket_owner_id_from_channel(interaction.channel) or interaction.user.id
+            control_view = TicketControlView(interaction.guild_id, interaction.channel_id, owner_id)
+            if not control_view.has_permission(interaction):
+                await interaction.response.send_message("❌ No permission | ليس لديك صلاحية", ephemeral=True)
+                return
+
+            action = self.values[0]
+
+            if action == "reset":
+                await interaction.response.send_message("🔄 Menu reset | تم إعادة تعيين القائمة", ephemeral=True, delete_after=2)
+                return
+            if action == "rename":
+                await interaction.response.send_modal(RenameTicketModal(interaction.channel))
+                return
+            if action == "add_user":
+                await interaction.response.send_modal(AddUserModal(interaction.channel))
+                return
+            if action == "remove_user":
+                await interaction.response.send_modal(RemoveUserModal(interaction.channel))
+                return
+        except Exception as e:
+            logger.error(f"Error in persistent menu action: {e}")
+            await interaction.response.send_message("❌ Error | خطأ", ephemeral=True)
+
+
+class TicketControlPersistentView(discord.ui.View):
+    """Persistent view for ticket controls (survives restarts)."""
+    def __init__(self):
+        super().__init__(timeout=None)
+
+        close_btn = discord.ui.Button(label="Close", style=discord.ButtonStyle.danger, custom_id="ticket_close")
+        claim_btn = discord.ui.Button(label="Claim", style=discord.ButtonStyle.primary, custom_id="ticket_claim")
+        ping_btn = discord.ui.Button(label="Ping Admin", style=discord.ButtonStyle.secondary, custom_id="ticket_ping_admin")
+        mention_btn = discord.ui.Button(label="Mention Member", style=discord.ButtonStyle.secondary, custom_id="ticket_mention_member")
+
+        close_btn.callback = self._close
+        claim_btn.callback = self._claim
+        ping_btn.callback = self._ping
+        mention_btn.callback = self._mention
+
+        self.add_item(close_btn)
+        self.add_item(claim_btn)
+        self.add_item(ping_btn)
+        self.add_item(mention_btn)
+        self.add_item(TicketMenuPersistentSelect())
+
+    async def _control_view(self, interaction: discord.Interaction) -> TicketControlView:
+        owner_id = _get_ticket_owner_id_from_channel(interaction.channel) or 0
+        return TicketControlView(interaction.guild_id, interaction.channel_id, owner_id)
+
+    async def _close(self, interaction: discord.Interaction):
+        await (await self._control_view(interaction)).close_ticket(interaction)
+
+    async def _claim(self, interaction: discord.Interaction):
+        await (await self._control_view(interaction)).claim_ticket(interaction)
+
+    async def _ping(self, interaction: discord.Interaction):
+        await (await self._control_view(interaction)).ping_admin(interaction)
+
+    async def _mention(self, interaction: discord.Interaction):
+        await (await self._control_view(interaction)).mention_member(interaction)
+
 class TicketMenuDropdown(discord.ui.Select):
     """Dropdown menu for ticket actions"""
     def __init__(self, guild_id: int, channel_id, owner_id):
@@ -3188,14 +3285,15 @@ class TicketMenuDropdown(discord.ui.Select):
             min_values=1,
             max_values=1,
             options=options,
-            custom_id=f"ticket_menu_{channel_id}"
+            custom_id="ticket_menu"
         )
     
     async def callback(self, interaction: discord.Interaction):
         """Handle menu selection (ADMIN ONLY)"""
         try:
             # Check if user has admin permission
-            control_view = TicketControlView(interaction.guild_id, interaction.channel_id, interaction.user.id)
+            owner_id = _get_ticket_owner_id_from_channel(interaction.channel) or interaction.user.id
+            control_view = TicketControlView(interaction.guild_id, interaction.channel_id, owner_id)
             if not control_view.has_permission(interaction):
                 await interaction.response.send_message("❌ No permission | ليس لديك صلاحية", ephemeral=True)
                 return
