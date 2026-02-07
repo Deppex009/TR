@@ -3664,7 +3664,13 @@ class NextModalView(discord.ui.View):
 
     @discord.ui.button(label="Next | التالي", style=discord.ButtonStyle.primary)
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(self._modal_factory())
+        try:
+            await interaction.response.send_modal(self._modal_factory())
+        except Exception as e:
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error | خطأ: {e}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error | خطأ: {e}", ephemeral=True)
 
 
 class TicketSetupPanelView(discord.ui.View):
