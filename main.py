@@ -2196,7 +2196,16 @@ def _competition_emoji_matches(stored: str, payload_emoji: discord.PartialEmoji)
         stored = str(stored or "").strip()
         if not stored:
             return False
+        stored_id = None
+        try:
+            m = re.search(r"(\d{5,25})", stored)
+            if m:
+                stored_id = int(m.group(1))
+        except Exception:
+            stored_id = None
         if payload_emoji.id:
+            if stored_id and int(payload_emoji.id) == stored_id:
+                return True
             return stored in {str(payload_emoji), str(payload_emoji.id), str(payload_emoji.name)}
         return stored in {str(payload_emoji), str(payload_emoji.name)}
     except Exception:
@@ -7185,6 +7194,11 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             return
 
         member = guild.get_member(payload.user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(payload.user_id)
+            except Exception:
+                return
         if not member or member.bot:
             return
 
