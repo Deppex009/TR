@@ -7475,7 +7475,7 @@ class ModSettingsView(discord.ui.View):
         modal = TimeoutSettingsModal()
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Untimeout", emoji="✅", style=discord.ButtonStyle.success, row=0, custom_id="modsetup:untimeout")
+    @discord.ui.button(label="Untimeout", emoji="✅", style=discord.ButtonStyle.success, row=1, custom_id="modsetup:untimeout")
     async def untimeout_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = UntimeoutSettingsModal()
         await interaction.response.send_modal(modal)
