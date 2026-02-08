@@ -7454,6 +7454,11 @@ class ModSettingsView(discord.ui.View):
     async def ban_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = BanSettingsModal()
         await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="Unban", emoji="✅", style=discord.ButtonStyle.success, row=0, custom_id="modsetup:unban")
+    async def unban_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = UnbanSettingsModal()
+        await interaction.response.send_modal(modal)
     
     @discord.ui.button(label="Kick", emoji="👢", style=discord.ButtonStyle.danger, row=0, custom_id="modsetup:kick")
     async def kick_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -7468,6 +7473,11 @@ class ModSettingsView(discord.ui.View):
     @discord.ui.button(label="Timeout", emoji="⏱️", style=discord.ButtonStyle.primary, row=0, custom_id="modsetup:timeout")
     async def timeout_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = TimeoutSettingsModal()
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="Untimeout", emoji="✅", style=discord.ButtonStyle.success, row=0, custom_id="modsetup:untimeout")
+    async def untimeout_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = UntimeoutSettingsModal()
         await interaction.response.send_modal(modal)
     
     @discord.ui.button(label="Log Channel", emoji="📝", style=discord.ButtonStyle.secondary, row=1, custom_id="modsetup:log")
@@ -7534,6 +7544,68 @@ class BanSettingsModal(discord.ui.Modal):
             msg = f"✅ Ban settings updated!"
             if self.shortcut.value:
                 msg += f"\n**Shortcut:** Type `{self.shortcut.value}` + mention user (e.g., `{self.shortcut.value} @user reason`)"
+            await interaction.response.send_message(msg, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+class UnbanSettingsModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="✅ Unban | فك حظر")
+
+        self.dm_msg = discord.ui.TextInput(
+            label="DM Msg | رسالة",
+            placeholder="You have been unbanned in {server}. Reason: {reason}",
+            style=discord.TextStyle.paragraph,
+            required=False,
+        )
+        self.add_item(self.dm_msg)
+
+        self.log_msg = discord.ui.TextInput(
+            label="Log Title | عنوان السجل",
+            placeholder="✅ **User Unbanned**",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=120,
+        )
+        self.add_item(self.log_msg)
+
+        self.shortcut = discord.ui.TextInput(
+            label="Shortcut | اختصار",
+            placeholder="ub",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=20,
+        )
+        self.add_item(self.shortcut)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            guild_cfg = get_guild_config(interaction.guild_id)
+            if "moderation" not in guild_cfg:
+                guild_cfg["moderation"] = {}
+            if "messages" not in guild_cfg["moderation"]:
+                guild_cfg["moderation"]["messages"] = {}
+            if "shortcuts" not in guild_cfg["moderation"]:
+                guild_cfg["moderation"]["shortcuts"] = {}
+
+            if self.dm_msg.value:
+                guild_cfg["moderation"]["messages"]["unban_dm"] = self.dm_msg.value
+            if self.log_msg.value:
+                guild_cfg["moderation"]["messages"]["unban_log"] = self.log_msg.value
+
+            if self.shortcut.value:
+                guild_cfg["moderation"]["shortcuts"][self.shortcut.value] = {
+                    "action": "unban",
+                    "command": "unban",
+                }
+
+            update_guild_config(interaction.guild_id, guild_cfg)
+            msg = "✅ Unban settings updated!"
+            if self.shortcut.value:
+                msg += (
+                    f"\n**Shortcut:** Type `{self.shortcut.value}` + user_id"
+                    f" (e.g., `{self.shortcut.value} 123456789012345678 reason`)"
+                )
             await interaction.response.send_message(msg, ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
@@ -7680,6 +7752,69 @@ class TimeoutSettingsModal(discord.ui.Modal):
                 msg += (
                     f"\n**Shortcut | اختصار:** `{self.shortcut.value}` + @user + duration | المدة"
                     f"\nExample | مثال: `{self.shortcut.value} @user 10m reason`"
+                )
+            await interaction.response.send_message(msg, ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+
+class UntimeoutSettingsModal(discord.ui.Modal):
+    def __init__(self):
+        super().__init__(title="✅ Untimeout | إزالة المهلة")
+
+        self.dm_msg = discord.ui.TextInput(
+            label="DM Msg | رسالة",
+            placeholder="Your timeout has been removed in {server}. Reason: {reason}",
+            style=discord.TextStyle.paragraph,
+            required=False,
+        )
+        self.add_item(self.dm_msg)
+
+        self.log_msg = discord.ui.TextInput(
+            label="Log Title | عنوان السجل",
+            placeholder="✅ **Timeout Removed**",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=120,
+        )
+        self.add_item(self.log_msg)
+
+        self.shortcut = discord.ui.TextInput(
+            label="Shortcut | اختصار",
+            placeholder="ut",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=20,
+        )
+        self.add_item(self.shortcut)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            guild_cfg = get_guild_config(interaction.guild_id)
+            if "moderation" not in guild_cfg:
+                guild_cfg["moderation"] = {}
+            if "messages" not in guild_cfg["moderation"]:
+                guild_cfg["moderation"]["messages"] = {}
+            if "shortcuts" not in guild_cfg["moderation"]:
+                guild_cfg["moderation"]["shortcuts"] = {}
+
+            if self.dm_msg.value:
+                guild_cfg["moderation"]["messages"]["untimeout_dm"] = self.dm_msg.value
+            if self.log_msg.value:
+                guild_cfg["moderation"]["messages"]["untimeout_log"] = self.log_msg.value
+
+            if self.shortcut.value:
+                guild_cfg["moderation"]["shortcuts"][self.shortcut.value] = {
+                    "action": "untimeout",
+                    "command": "untimeout",
+                }
+
+            update_guild_config(interaction.guild_id, guild_cfg)
+            msg = "✅ Untimeout settings updated | تم تحديث إزالة المهلة"
+            if self.shortcut.value:
+                msg += (
+                    f"\n**Shortcut | اختصار:** `{self.shortcut.value}` + @user"
+                    f" (e.g., `{self.shortcut.value} @user reason`)"
                 )
             await interaction.response.send_message(msg, ephemeral=True)
         except Exception as e:
@@ -7941,9 +8076,11 @@ async def mod_setup(interaction: discord.Interaction):
                 "**Configure actions + shortcuts (English/Arabic):**\n"
                 "**إعداد الأوامر + الاختصارات (عربي/إنجليزي):**\n\n"
                 "🔨 **Ban | حظر** - Message & shortcut | رسالة + اختصار\n"
+                "✅ **Unban | فك حظر** - Message & shortcut | رسالة + اختصار\n"
                 "👢 **Kick | طرد** - Message & shortcut | رسالة + اختصار\n"
                 "⚠️ **Warn | تحذير** - Message & shortcut | رسالة + اختصار\n"
                 "⏱️ **Timeout | مهلة** - Message & shortcut | رسالة + اختصار\n"
+                "✅ **Untimeout | إزالة مهلة** - Message & shortcut | رسالة + اختصار\n"
                 "🧹 **Clear | مسح** - Shortcut + default amount | اختصار + رقم افتراضي\n"
                 "🔒 **Lock/Unlock | قفل/فتح** - Shortcuts | اختصارات\n"
                 "🛡️ **Access Role | صلاحية** - Who can use mod system | من يستطيع استخدام الإشراف\n"
