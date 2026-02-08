@@ -5905,13 +5905,17 @@ def get_mod_config(guild_id):
     # Default templates (used as embed description; placeholders: {server} {reason} {duration} {moderator})
     default_messages = {
         "ban_dm": "تم حظرك من **{server}**.\nالسبب: {reason}\n\nYou have been banned from **{server}**.\nReason: {reason}",
+        "unban_dm": "تم فك الحظر عنك في **{server}**.\nالسبب: {reason}\n\nYou have been unbanned in **{server}**.\nReason: {reason}",
         "kick_dm": "تم طردك من **{server}**.\nالسبب: {reason}\n\nYou have been kicked from **{server}**.\nReason: {reason}",
         "warn_dm": "تم تحذيرك في **{server}**.\nالسبب: {reason}\n\nYou have been warned in **{server}**.\nReason: {reason}",
         "timeout_dm": "تم إعطاؤك مهلة (Timeout) في **{server}**.\nالمدة: {duration}\nالسبب: {reason}\n\nYou have been timed out in **{server}**.\nDuration: {duration}\nReason: {reason}",
+        "untimeout_dm": "تم إزالة المهلة عنك في **{server}**.\nالسبب: {reason}\n\nYour timeout has been removed in **{server}**.\nReason: {reason}",
         "ban_log": "🔨 **User Banned | تم الحظر**",
+        "unban_log": "✅ **User Unbanned | تم فك الحظر**",
         "kick_log": "👢 **User Kicked | تم الطرد**",
         "warn_log": "⚠️ **User Warned | تم التحذير**",
         "timeout_log": "⏱️ **User Timed Out | تم الإعطاء مهلة**",
+        "untimeout_log": "✅ **Timeout Removed | تم إزالة المهلة**",
         "channel_locked": "🔒 **Channel Locked | تم قفل القناة**",
         "channel_unlocked": "🔓 **Channel Unlocked | تم فتح القناة**",
     }
@@ -5926,9 +5930,11 @@ def get_mod_config(guild_id):
         changed = True
     default_colors = {
         "ban": "#ED4245",
+        "unban": "#57F287",
         "kick": "#FEE75C",
         "warn": "#F1C40F",
         "timeout": "#5865F2",
+        "untimeout": "#57F287",
         # messaging commands
         "dm": "#57F287",
         "say": "#57F287",
@@ -5950,9 +5956,11 @@ def build_mod_dm_embed(action, guild, moderator, reason, duration=None):
 
     titles = {
         "ban": "🔨 Banned | تم الحظر",
+        "unban": "✅ Unbanned | تم فك الحظر",
         "kick": "👢 Kicked | تم الطرد",
         "warn": "⚠️ Warning | تحذير",
         "timeout": "⏱️ Timeout | مهلة",
+        "untimeout": "✅ Timeout Removed | إزالة المهلة",
         "dm": "✉️ Message | رسالة",
         "say": "📣 Announcement | إعلان",
     }
@@ -6101,6 +6109,58 @@ async def ban_user(interaction: discord.Interaction, user: discord.Member = None
     except Exception as e:
         await interaction.response.send_message(f"❌ خطأ | Error: {str(e)}", ephemeral=True)
 
+
+@bot.tree.command(name="unban", description="Unban a user | فك حظر")
+@app_commands.describe(user_id="User ID to unban", reason="Reason for unban")
+async def unban_user(interaction: discord.Interaction, user_id: str, reason: str = "No reason provided"):
+    """Unban a user from the server"""
+    try:
+        if not interaction.user.guild_permissions.ban_members:
+            return await interaction.response.send_message(
+                "❌ ليس لديك صلاحية لفك الحظر | You don't have permission to unban members",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="unban"):
+            return await interaction.response.send_message(
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
+                ephemeral=True,
+            )
+
+        raw_id = "".join([c for c in str(user_id) if c.isdigit()])
+        if not raw_id:
+            return await interaction.response.send_message("❌ Invalid user ID | ايدي غير صحيح", ephemeral=True)
+
+        target_id = int(raw_id)
+        target_obj = discord.Object(id=target_id)
+
+        try:
+            ban_entry = await interaction.guild.fetch_ban(target_obj)
+            banned_user = ban_entry.user
+        except Exception:
+            return await interaction.response.send_message("❌ User not banned | العضو غير محظور", ephemeral=True)
+
+        await interaction.guild.unban(banned_user, reason=reason)
+
+        embed = discord.Embed(
+            title="✅ تم فك الحظر | User Unbanned",
+            description=f"<@{banned_user.id}> **تم فك الحظر عنه**\n**السبب:** {reason}\n\n<@{banned_user.id}> **has been unbanned**\n**Reason:** {reason}",
+            color=discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed)
+
+        if mod_cfg.get("dm_on_action", True):
+            try:
+                dm_embed = build_mod_dm_embed("unban", interaction.guild, interaction.user, reason)
+                await banned_user.send(embed=dm_embed)
+            except Exception as e:
+                logger.error(f"Failed to send DM to {banned_user}: {e}")
+
+        await send_mod_log(interaction.guild, "unban", interaction.user, banned_user, reason)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ خطأ | Error: {str(e)}", ephemeral=True)
+
 @bot.tree.command(name="kick", description="Kick a user | طرد عضو")
 @app_commands.describe(user="The user to kick", reason="Reason for kick")
 async def kick_user(interaction: discord.Interaction, user: discord.Member = None, reason: str = "No reason provided"):
@@ -6201,6 +6261,53 @@ async def timeout_user(interaction: discord.Interaction, user: discord.Member = 
                 logger.error(f"Failed to send DM to {user}: {e}")
         
         await send_mod_log(interaction.guild, "timeout", interaction.user, user, reason, f"{duration} minutes")
+    except Exception as e:
+        await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
+
+
+@bot.tree.command(name="untimeout", description="Remove timeout | إزالة المهلة")
+@app_commands.describe(user="The user to remove timeout from", reason="Reason")
+async def untimeout_user(interaction: discord.Interaction, user: discord.Member = None, reason: str = "No reason provided"):
+    """Remove timeout from a user"""
+    try:
+        if not user:
+            help_embed = discord.Embed(
+                title="Command: untimeout | أمر: إزالة مهلة",
+                description="**إزالة مهلة العضو**\n**الاستخدام**\n`/untimeout [user] (reason)`\n\n**أمثلة للأمر:**\n`/untimeout @user`\n`/untimeout @user apologized`",
+                color=discord.Color.green(),
+            )
+            return await interaction.response.send_message(embed=help_embed, ephemeral=True)
+
+        if not interaction.user.guild_permissions.moderate_members:
+            return await interaction.response.send_message(
+                "❌ No permission | ليس لديك صلاحية لإزالة المهلة",
+                ephemeral=True,
+            )
+
+        mod_cfg = get_mod_config(interaction.guild_id)
+        if not is_mod_authorized(interaction.user, mod_cfg, action="untimeout"):
+            return await interaction.response.send_message(
+                "❌ Not allowed | غير مسموح لك باستخدام أوامر الإشراف هنا.",
+                ephemeral=True,
+            )
+
+        await user.timeout(None, reason=reason)
+
+        embed = discord.Embed(
+            title="✅ تم إزالة المهلة | Timeout Removed",
+            description=f"{user.mention} **تم إزالة المهلة عنه**\n**السبب:** {reason}\n\n{user.mention} **timeout has been removed**\n**Reason:** {reason}",
+            color=discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed)
+
+        if mod_cfg.get("dm_on_action", True):
+            try:
+                dm_embed = build_mod_dm_embed("untimeout", interaction.guild, interaction.user, reason)
+                await user.send(embed=dm_embed)
+            except Exception as e:
+                logger.error(f"Failed to send DM to {user}: {e}")
+
+        await send_mod_log(interaction.guild, "untimeout", interaction.user, user, reason)
     except Exception as e:
         await interaction.response.send_message(f"❌ Error | خطأ: {str(e)}", ephemeral=True)
 
@@ -6994,13 +7101,15 @@ async def on_message(message):
                         except Exception:
                             pass
                     
-                    # Handle moderation shortcuts (ban, kick, warn, timeout)
-                    elif action in ["ban", "kick", "warn", "timeout"]:
+                    # Handle moderation shortcuts (ban, unban, kick, warn, timeout, untimeout)
+                    elif action in ["ban", "unban", "kick", "warn", "timeout", "untimeout"]:
                         required_perm = {
                             "ban": "ban_members",
+                            "unban": "ban_members",
                             "kick": "kick_members",
                             "warn": "moderate_members",
                             "timeout": "moderate_members",
+                            "untimeout": "moderate_members",
                         }.get(action)
                         if required_perm and not getattr(message.author.guild_permissions, required_perm, False):
                             continue
@@ -7008,7 +7117,32 @@ async def on_message(message):
                         # Parse: shortcut @user reason or shortcut @user duration reason
                         content = message.content[len(shortcut):].strip()
                         
-                        if not message.mentions:
+                        if action == "unban":
+                            raw = content.strip()
+                            target_id = None
+                            if message.mentions:
+                                target_id = int(message.mentions[0].id)
+                            elif raw:
+                                raw_digits = "".join([c for c in raw.split()[0] if c.isdigit()])
+                                if raw_digits:
+                                    target_id = int(raw_digits)
+
+                            if not target_id:
+                                help_embed = discord.Embed(
+                                    title="Command: unban | أمر: فك الحظر",
+                                    description=(
+                                        "**فك حظر العضو**\n"
+                                        "**الاستخدام**\n"
+                                        f"`{shortcut} [user_id] (reason)`\n\n"
+                                        "**أمثلة للأمر:**\n"
+                                        f"`{shortcut} 123456789012345678`\n"
+                                        f"`{shortcut} 123456789012345678 apologized`"
+                                    ),
+                                    color=discord.Color.green(),
+                                )
+                                await message.channel.send(embed=help_embed, delete_after=15)
+                                continue
+                        elif not message.mentions:
                             # Show help message
                             if action == "ban":
                                 help_embed = discord.Embed(
@@ -7034,10 +7168,23 @@ async def on_message(message):
                                     description="**مهلة العضو**\n**الأختصارات**\n`#مهلة -مهلة- ميوت- كتم- صامت`\n**الاستخدام**\n`/timeout [user] [duration] (reason)`\n\n**أمثلة للأمر:**\n`" + shortcut + " @user 10m`\n`" + shortcut + " @user 10m spamming`\n`" + shortcut + " @user 1h trolling`\n`" + shortcut + " @user 1d breaking rules`\n\n**Duration format:** 10s, 5m, 2h, 1d",
                                     color=discord.Color.yellow()
                                 )
+                            elif action == "untimeout":
+                                help_embed = discord.Embed(
+                                    title="Command: untimeout | أمر: إزالة مهلة",
+                                    description=(
+                                        "**إزالة مهلة العضو**\n"
+                                        "**الاستخدام**\n"
+                                        f"`{shortcut} @user (reason)`\n\n"
+                                        "**أمثلة للأمر:**\n"
+                                        f"`{shortcut} @user`\n"
+                                        f"`{shortcut} @user apologized`"
+                                    ),
+                                    color=discord.Color.green(),
+                                )
                             await message.channel.send(embed=help_embed, delete_after=15)
                             continue
                         
-                        target = message.mentions[0]
+                        target = message.mentions[0] if message.mentions else None
                         
                         # Remove mention from content to get reason/duration
                         rest = content.replace(f"<@{target.id}>", "").replace(f"<@!{target.id}>", "").strip()
@@ -7054,7 +7201,7 @@ async def on_message(message):
                                 description=f"{target.mention} **تم حظره**\n**السبب:** {reason}\n\n{target.mention} **has been banned**\n**Reason:** {reason}",
                                 color=discord.Color.red()
                             )
-                            await message.channel.send(embed=embed, delete_after=10)
+                            await message.channel.send(embed=embed)
                             
                             # Send DM
                             if mod_cfg.get("dm_on_action", True):
@@ -7078,7 +7225,7 @@ async def on_message(message):
                                 description=f"{target.mention} **تم طرده**\n**السبب:** {reason}\n\n{target.mention} **has been kicked**\n**Reason:** {reason}",
                                 color=discord.Color.orange()
                             )
-                            await message.channel.send(embed=embed, delete_after=10)
+                            await message.channel.send(embed=embed)
                             
                             # Send DM
                             if mod_cfg.get("dm_on_action", True):
@@ -7099,7 +7246,7 @@ async def on_message(message):
                                 description=f"{target.mention} **تم تحذيره**\n**السبب:** {reason}\n\n{target.mention} **has been warned**\n**Reason:** {reason}",
                                 color=discord.Color.gold()
                             )
-                            await message.channel.send(embed=embed, delete_after=10)
+                            await message.channel.send(embed=embed)
                             
                             # Send DM
                             if mod_cfg.get("dm_on_action", True):
@@ -7148,7 +7295,7 @@ async def on_message(message):
                                 description=f"{target.mention} **تم كتمه**\n**المدة:** {duration_str}\n**السبب:** {reason}\n\n{target.mention} **has been timed out**\n**Duration:** {duration_str}\n**Reason:** {reason}",
                                 color=discord.Color.yellow()
                             )
-                            await message.channel.send(embed=embed, delete_after=10)
+                            await message.channel.send(embed=embed)
                             
                             # Send DM
                             if mod_cfg.get("dm_on_action", True):
@@ -7160,6 +7307,61 @@ async def on_message(message):
                             
                             await send_mod_log(message.guild, "timeout", message.author, target, reason, duration_str)
                         
+                        elif action == "unban":
+                            reason = "No reason provided"
+                            if content:
+                                pieces = content.split(" ", 1)
+                                if len(pieces) > 1:
+                                    reason = pieces[1].strip() or reason
+
+                            try:
+                                ban_entry = await message.guild.fetch_ban(discord.Object(id=target_id))
+                                banned_user = ban_entry.user
+                            except Exception:
+                                notify = await message.channel.send("❌ User not banned | العضو غير محظور")
+                                await discord.utils.sleep_until(discord.utils.utcnow() + timedelta(seconds=5))
+                                await notify.delete()
+                                continue
+
+                            await message.guild.unban(banned_user, reason=reason)
+                            embed = discord.Embed(
+                                title="✅ تم فك الحظر | User Unbanned",
+                                description=f"<@{banned_user.id}> **تم فك الحظر عنه**\n**السبب:** {reason}\n\n<@{banned_user.id}> **has been unbanned**\n**Reason:** {reason}",
+                                color=discord.Color.green(),
+                            )
+                            await message.channel.send(embed=embed)
+
+                            if mod_cfg.get("dm_on_action", True):
+                                try:
+                                    dm_embed = build_mod_dm_embed("unban", message.guild, message.author, reason)
+                                    await banned_user.send(embed=dm_embed)
+                                except Exception as e:
+                                    logger.error(f"Failed to send DM: {e}")
+
+                            await send_mod_log(message.guild, "unban", message.author, banned_user, reason)
+
+                        elif action == "untimeout":
+                            reason = rest if rest else "No reason provided"
+                            if not target:
+                                continue
+
+                            await target.timeout(None, reason=reason)
+                            embed = discord.Embed(
+                                title="✅ تم إزالة المهلة | Timeout Removed",
+                                description=f"{target.mention} **تم إزالة المهلة عنه**\n**السبب:** {reason}\n\n{target.mention} **timeout has been removed**\n**Reason:** {reason}",
+                                color=discord.Color.green(),
+                            )
+                            await message.channel.send(embed=embed)
+
+                            if mod_cfg.get("dm_on_action", True):
+                                try:
+                                    dm_embed = build_mod_dm_embed("untimeout", message.guild, message.author, reason)
+                                    await target.send(embed=dm_embed)
+                                except Exception as e:
+                                    logger.error(f"Failed to send DM: {e}")
+
+                            await send_mod_log(message.guild, "untimeout", message.author, target, reason)
+
                         await message.delete()
                     
                 except Exception as e:

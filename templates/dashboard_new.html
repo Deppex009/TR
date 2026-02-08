@@ -467,36 +467,48 @@
                             <div class="setting-group-title">DM Messages (Use {server}, {reason}, {duration})</div>
                             <label>Ban DM Message</label>
                             <input type="text" id="ban-dm-msg" placeholder="You have been banned from {server}. Reason: {reason}" value="{{ config.moderation.messages.ban_dm if config.moderation and config.moderation.messages else '' }}">
+                            <label>Unban DM Message</label>
+                            <input type="text" id="unban-dm-msg" placeholder="You have been unbanned in {server}. Reason: {reason}" value="{{ config.moderation.messages.unban_dm if config.moderation and config.moderation.messages else '' }}">
                             <label>Kick DM Message</label>
                             <input type="text" id="kick-dm-msg" placeholder="You have been kicked from {server}. Reason: {reason}" value="{{ config.moderation.messages.kick_dm if config.moderation and config.moderation.messages else '' }}">
                             <label>Warn DM Message</label>
                             <input type="text" id="warn-dm-msg" placeholder="You have been warned in {server}. Reason: {reason}" value="{{ config.moderation.messages.warn_dm if config.moderation and config.moderation.messages else '' }}">
                             <label>Timeout DM Message</label>
                             <input type="text" id="timeout-dm-msg" placeholder="You have been timed out. Duration: {duration}. Reason: {reason}" value="{{ config.moderation.messages.timeout_dm if config.moderation and config.moderation.messages else '' }}">
+                            <label>Untimeout DM Message</label>
+                            <input type="text" id="untimeout-dm-msg" placeholder="Your timeout has been removed in {server}. Reason: {reason}" value="{{ config.moderation.messages.untimeout_dm if config.moderation and config.moderation.messages else '' }}">
                         </div>
 
                         <div class="setting-group">
                             <div class="setting-group-title">Log Messages</div>
                             <label>Ban Log Title</label>
                             <input type="text" id="ban-log-msg" placeholder="🔨 **User Banned**" value="{{ config.moderation.messages.ban_log if config.moderation and config.moderation.messages else '' }}">
+                            <label>Unban Log Title</label>
+                            <input type="text" id="unban-log-msg" placeholder="✅ **User Unbanned**" value="{{ config.moderation.messages.unban_log if config.moderation and config.moderation.messages else '' }}">
                             <label>Kick Log Title</label>
                             <input type="text" id="kick-log-msg" placeholder="👢 **User Kicked**" value="{{ config.moderation.messages.kick_log if config.moderation and config.moderation.messages else '' }}">
                             <label>Warn Log Title</label>
                             <input type="text" id="warn-log-msg" placeholder="⚠️ **User Warned**" value="{{ config.moderation.messages.warn_log if config.moderation and config.moderation.messages else '' }}">
                             <label>Timeout Log Title</label>
                             <input type="text" id="timeout-log-msg" placeholder="⏱️ **User Timed Out**" value="{{ config.moderation.messages.timeout_log if config.moderation and config.moderation.messages else '' }}">
+                            <label>Untimeout Log Title</label>
+                            <input type="text" id="untimeout-log-msg" placeholder="✅ **Timeout Removed**" value="{{ config.moderation.messages.untimeout_log if config.moderation and config.moderation.messages else '' }}">
                         </div>
 
                         <div class="setting-group">
                             <div class="setting-group-title">Action Shortcuts</div>
                             <label>Ban Shortcut</label>
                             <input type="text" id="ban-shortcut" placeholder="b" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'ban' %}{{ k }}{% endif %}{% endfor %}">
+                            <label>Unban Shortcut</label>
+                            <input type="text" id="unban-shortcut" placeholder="ub" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'unban' %}{{ k }}{% endif %}{% endfor %}">
                             <label>Kick Shortcut</label>
                             <input type="text" id="kick-shortcut" placeholder="k" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'kick' %}{{ k }}{% endif %}{% endfor %}">
                             <label>Warn Shortcut</label>
                             <input type="text" id="warn-shortcut" placeholder="w" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'warn' %}{{ k }}{% endif %}{% endfor %}">
                             <label>Timeout Shortcut</label>
                             <input type="text" id="timeout-shortcut" placeholder="t" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'timeout' %}{{ k }}{% endif %}{% endfor %}">
+                            <label>Untimeout Shortcut</label>
+                            <input type="text" id="untimeout-shortcut" placeholder="ut" value="{% for k,v in (config.moderation.shortcuts.items() if config.moderation and config.moderation.shortcuts else []) %}{% if v.action == 'untimeout' %}{{ k }}{% endif %}{% endfor %}">
                             <p style="color: rgba(255,255,255,0.5); font-size: 0.85rem; margin-top: 5px;">
                                 Usage: Type shortcut + mention + reason (e.g., "b @user spam" to ban)
                             </p>
@@ -682,6 +694,11 @@
             if (banShortcut) {
                 shortcuts[banShortcut] = { action: 'ban', command: 'ban' };
             }
+
+            const unbanShortcut = document.getElementById('unban-shortcut').value.trim();
+            if (unbanShortcut) {
+                shortcuts[unbanShortcut] = { action: 'unban', command: 'unban' };
+            }
             
             const kickShortcut = document.getElementById('kick-shortcut').value.trim();
             if (kickShortcut) {
@@ -696,6 +713,11 @@
             const timeoutShortcut = document.getElementById('timeout-shortcut').value.trim();
             if (timeoutShortcut) {
                 shortcuts[timeoutShortcut] = { action: 'timeout', command: 'timeout' };
+            }
+
+            const untimeoutShortcut = document.getElementById('untimeout-shortcut').value.trim();
+            if (untimeoutShortcut) {
+                shortcuts[untimeoutShortcut] = { action: 'untimeout', command: 'untimeout' };
             }
             
             // Add delete shortcuts
@@ -720,13 +742,17 @@
                     shortcuts: shortcuts,
                     messages: {
                         ban_dm: document.getElementById('ban-dm-msg').value || 'You have been banned from {server}. Reason: {reason}',
+                        unban_dm: document.getElementById('unban-dm-msg').value || 'You have been unbanned in {server}. Reason: {reason}',
                         kick_dm: document.getElementById('kick-dm-msg').value || 'You have been kicked from {server}. Reason: {reason}',
                         warn_dm: document.getElementById('warn-dm-msg').value || 'You have been warned in {server}. Reason: {reason}',
                         timeout_dm: document.getElementById('timeout-dm-msg').value || 'You have been timed out in {server}. Duration: {duration}. Reason: {reason}',
+                        untimeout_dm: document.getElementById('untimeout-dm-msg').value || 'Your timeout has been removed in {server}. Reason: {reason}',
                         ban_log: document.getElementById('ban-log-msg').value || '🔨 **User Banned**',
+                        unban_log: document.getElementById('unban-log-msg').value || '✅ **User Unbanned**',
                         kick_log: document.getElementById('kick-log-msg').value || '👢 **User Kicked**',
                         warn_log: document.getElementById('warn-log-msg').value || '⚠️ **User Warned**',
-                        timeout_log: document.getElementById('timeout-log-msg').value || '⏱️ **User Timed Out**'
+                        timeout_log: document.getElementById('timeout-log-msg').value || '⏱️ **User Timed Out**',
+                        untimeout_log: document.getElementById('untimeout-log-msg').value || '✅ **Timeout Removed**'
                     }
                 }
             };
@@ -811,19 +837,25 @@
             'Moderation Log Channel ID': 'معرف قناة سجل الإدارة',
             'DM Messages': 'رسائل الخاص',
             'Ban DM Message': 'رسالة خاص الحظر',
+            'Unban DM Message': 'رسالة خاص فك الحظر',
             'Kick DM Message': 'رسالة خاص الطرد',
             'Warn DM Message': 'رسالة خاص التحذير',
             'Timeout DM Message': 'رسالة خاص العقوبة المؤقتة',
+            'Untimeout DM Message': 'رسالة خاص إزالة المهلة',
             'Log Titles': 'عناوين السجل',
             'Ban Log Title': 'عنوان سجل الحظر',
+            'Unban Log Title': 'عنوان سجل فك الحظر',
             'Kick Log Title': 'عنوان سجل الطرد',
             'Warn Log Title': 'عنوان سجل التحذير',
             'Timeout Log Title': 'عنوان سجل العقوبة',
+            'Untimeout Log Title': 'عنوان سجل إزالة المهلة',
             'Shortcuts': 'الاختصارات',
             'Ban Shortcut': 'اختصار الحظر',
+            'Unban Shortcut': 'اختصار فك الحظر',
             'Kick Shortcut': 'اختصار الطرد',
             'Warn Shortcut': 'اختصار التحذير',
             'Timeout Shortcut': 'اختصار العقوبة',
+            'Untimeout Shortcut': 'اختصار إزالة المهلة',
             'Delete Shortcuts (Format: shortcut:amount, e.g., "m:5, d:10")': 'اختصارات الحذف (الصيغة: اختصار:عدد، مثل "م:5، ي:10")',
             'Save Moderation': 'حفظ الإدارة',
             'General Settings': 'الإعدادات العامة',
