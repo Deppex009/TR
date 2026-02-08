@@ -7140,7 +7140,7 @@ async def on_message(message):
                                     ),
                                     color=discord.Color.green(),
                                 )
-                                await message.channel.send(embed=help_embed, delete_after=15)
+                                await message.channel.send(embed=help_embed)
                                 continue
                         elif not message.mentions:
                             # Show help message
@@ -7181,7 +7181,7 @@ async def on_message(message):
                                     ),
                                     color=discord.Color.green(),
                                 )
-                            await message.channel.send(embed=help_embed, delete_after=15)
+                            await message.channel.send(embed=help_embed)
                             continue
                         
                         target = message.mentions[0] if message.mentions else None
