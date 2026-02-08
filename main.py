@@ -126,6 +126,19 @@ def get_guild_config(guild_id):
                     "image_url": ""
                 }
                 save_config(config)
+            if "competition" not in guild_cfg:
+                guild_cfg["competition"] = {
+                    "channel_id": None,
+                    "message_id": None,
+                    "role_id": None,
+                    "reaction_emoji": "🎯",
+                    "embed_color": "#5865F2",
+                    "title": "🏆 Competition | مسابقة",
+                    "description": "React with {emoji} to get the role | تفاعل بـ {emoji} للحصول على الرتبة",
+                    "image_url": "",
+                    "footer_text": "",
+                }
+                save_config(config)
             return guild_cfg
         else:
             # Create default config for this server
@@ -148,6 +161,17 @@ def get_guild_config(guild_id):
                     "emoji": "🎉",
                     "color": "#5865F2",
                     "image_url": ""
+                },
+                "competition": {
+                    "channel_id": None,
+                    "message_id": None,
+                    "role_id": None,
+                    "reaction_emoji": "🎯",
+                    "embed_color": "#5865F2",
+                    "title": "🏆 Competition | مسابقة",
+                    "description": "React with {emoji} to get the role | تفاعل بـ {emoji} للحصول على الرتبة",
+                    "image_url": "",
+                    "footer_text": "",
                 },
                 "voice_247": {
                     "enabled": False,
@@ -194,6 +218,17 @@ def update_guild_config(guild_id, updates):
                 "emoji": "🎉",
                 "color": "#5865F2",
                 "image_url": ""
+            },
+            "competition": {
+                "channel_id": None,
+                "message_id": None,
+                "role_id": None,
+                "reaction_emoji": "🎯",
+                "embed_color": "#5865F2",
+                "title": "🏆 Competition | مسابقة",
+                "description": "React with {emoji} to get the role | تفاعل بـ {emoji} للحصول على الرتبة",
+                "image_url": "",
+                "footer_text": "",
             },
             "voice_247": {
                 "enabled": False,
@@ -1281,6 +1316,34 @@ def get_giveaway_config(guild_id: int) -> dict:
     return gw
 
 
+def get_competition_config(guild_id: int) -> dict:
+    guild_cfg = get_guild_config(guild_id)
+    comp = guild_cfg.get("competition")
+    if not isinstance(comp, dict):
+        comp = {}
+
+    changed = False
+    defaults = {
+        "channel_id": None,
+        "message_id": None,
+        "role_id": None,
+        "reaction_emoji": "🎯",
+        "embed_color": "#5865F2",
+        "title": "🏆 Competition | مسابقة",
+        "description": "React with {emoji} to get the role | تفاعل بـ {emoji} للحصول على الرتبة",
+        "image_url": "",
+        "footer_text": "",
+    }
+    for k, v in defaults.items():
+        if k not in comp:
+            comp[k] = v
+            changed = True
+
+    if changed:
+        update_guild_config(guild_id, {"competition": comp})
+    return comp
+
+
 def _safe_format(template: str, **kwargs) -> str:
     try:
         return str(template).format(**kwargs)
@@ -1347,6 +1410,71 @@ def build_giveaway_embed(
     )
     if giveaway_cfg.get("image_url"):
         embed.set_image(url=str(giveaway_cfg.get("image_url")))
+    embed.set_footer(text=guild.name)
+    return embed
+
+
+def build_competition_embed(guild: discord.Guild, comp: dict) -> discord.Embed:
+    role_mention = "—"
+    role_id = comp.get("role_id")
+    if role_id:
+        role = guild.get_role(int(role_id))
+        if role:
+            role_mention = role.mention
+
+    emoji = str(comp.get("reaction_emoji") or "🎯")
+    title = str(comp.get("title") or "🏆 Competition | مسابقة")
+    description_template = str(comp.get("description") or "")
+    description = _safe_format(description_template, emoji=emoji, role=role_mention)
+
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=parse_color(comp.get("embed_color", "#5865F2")),
+    )
+
+    image_url = str(comp.get("image_url") or "").strip()
+    if image_url:
+        embed.set_image(url=image_url)
+
+    footer_text = str(comp.get("footer_text") or "").strip()
+    if footer_text:
+        embed.set_footer(text=footer_text)
+    return embed
+
+
+def _build_competition_settings_embed(guild: discord.Guild, comp: dict) -> discord.Embed:
+    role_text = "None | لا يوجد"
+    if comp.get("role_id"):
+        role = guild.get_role(int(comp.get("role_id")))
+        if role:
+            role_text = role.mention
+
+    channel_text = "None | لا يوجد"
+    if comp.get("channel_id"):
+        channel = guild.get_channel(int(comp.get("channel_id")))
+        if channel:
+            channel_text = channel.mention
+
+    embed = discord.Embed(
+        title="🏆 Competition Panel | لوحة المسابقة",
+        description="Edit the competition embed + reaction role.\nعدل رسالة المسابقة والرتبة.",
+        color=parse_color(comp.get("embed_color", "#5865F2")),
+    )
+    embed.add_field(name="Channel | القناة", value=channel_text, inline=False)
+    embed.add_field(name="Role | الرتبة", value=role_text, inline=True)
+    embed.add_field(name="Reaction | التفاعل", value=str(comp.get("reaction_emoji") or "🎯"), inline=True)
+    title_text = str(comp.get("title") or "")
+    desc_text = str(comp.get("description") or "")
+    embed.add_field(name="Title | العنوان", value=title_text[:1024] or "—", inline=False)
+    embed.add_field(name="Description | الوصف", value=desc_text[:1024] or "—", inline=False)
+
+    img = str(comp.get("image_url") or "").strip()
+    embed.add_field(name="Image | الصورة", value=(img if img else "(none) | لا يوجد"), inline=False)
+
+    footer = str(comp.get("footer_text") or "").strip()
+    embed.add_field(name="Footer | التذييل", value=(footer if footer else "(none) | لا يوجد"), inline=False)
+
     embed.set_footer(text=guild.name)
     return embed
 
@@ -2024,6 +2152,248 @@ async def giveaway_panel(interaction: discord.Interaction):
         view=GiveawaySettingsView(interaction.guild_id),
         ephemeral=True,
     )
+
+
+# ===================== COMPETITION SYSTEM =====================
+
+def _competition_emoji_matches(stored: str, payload_emoji: discord.PartialEmoji) -> bool:
+    try:
+        stored = str(stored or "").strip()
+        if not stored:
+            return False
+        if payload_emoji.id:
+            return stored in {str(payload_emoji), str(payload_emoji.id)}
+        return stored == str(payload_emoji)
+    except Exception:
+        return False
+
+
+class CompetitionEmbedModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Competition Embed | إيمبد المسابقة")
+        self.guild_id = int(guild_id)
+        comp = get_competition_config(self.guild_id)
+
+        self.title_input = discord.ui.TextInput(
+            label="Title | العنوان",
+            default=str(comp.get("title", ""))[:200],
+            required=False,
+            max_length=200,
+        )
+        self.desc_input = discord.ui.TextInput(
+            label="Description | الوصف",
+            default=str(comp.get("description", ""))[:1000],
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=1000,
+        )
+        self.color_input = discord.ui.TextInput(
+            label="Color (#RRGGBB) | اللون",
+            default=str(comp.get("embed_color", ""))[:32],
+            required=False,
+            max_length=32,
+        )
+        self.image_input = discord.ui.TextInput(
+            label="Image URL | رابط الصورة",
+            default=str(comp.get("image_url", ""))[:400],
+            required=False,
+            max_length=400,
+        )
+        self.footer_input = discord.ui.TextInput(
+            label="Footer (optional) | التذييل",
+            default=str(comp.get("footer_text", ""))[:200],
+            required=False,
+            max_length=200,
+        )
+
+        self.add_item(self.title_input)
+        self.add_item(self.desc_input)
+        self.add_item(self.color_input)
+        self.add_item(self.image_input)
+        self.add_item(self.footer_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        comp = get_competition_config(interaction.guild_id)
+        comp["title"] = str(self.title_input.value or "")
+        comp["description"] = str(self.desc_input.value or "")
+        comp["embed_color"] = str(self.color_input.value or "")
+        comp["image_url"] = str(self.image_input.value or "")
+        comp["footer_text"] = str(self.footer_input.value or "")
+        update_guild_config(interaction.guild_id, {"competition": comp})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class CompetitionReactionRoleModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Reaction Role | رتبة التفاعل")
+        self.guild_id = int(guild_id)
+        comp = get_competition_config(self.guild_id)
+
+        self.emoji_input = discord.ui.TextInput(
+            label="Reaction Emoji | ايموجي",
+            default=str(comp.get("reaction_emoji", ""))[:50],
+            required=False,
+            max_length=50,
+        )
+        self.role_input = discord.ui.TextInput(
+            label="Role mention/ID | منشن/ايدي",
+            default=str(comp.get("role_id") or "")[:50],
+            required=False,
+            max_length=50,
+        )
+
+        self.add_item(self.emoji_input)
+        self.add_item(self.role_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        comp = get_competition_config(interaction.guild_id)
+        comp["reaction_emoji"] = str(self.emoji_input.value or "").strip() or "🎯"
+
+        raw_role = str(self.role_input.value or "").strip()
+        role_id = None
+        if raw_role:
+            m = re.search(r"<@&(?P<id>\d{5,25})>", raw_role)
+            if m:
+                role_id = int(m.group("id"))
+            else:
+                m2 = re.search(r"\b\d{5,25}\b", raw_role)
+                if m2:
+                    role_id = int(m2.group(0))
+        comp["role_id"] = role_id
+
+        update_guild_config(interaction.guild_id, {"competition": comp})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class CompetitionChannelModal(discord.ui.Modal):
+    def __init__(self, guild_id: int):
+        super().__init__(title="Default Channel | القناة الافتراضية")
+        self.guild_id = int(guild_id)
+        comp = get_competition_config(self.guild_id)
+
+        self.channel_input = discord.ui.TextInput(
+            label="Channel mention/ID | منشن/ايدي",
+            default=str(comp.get("channel_id") or "")[:50],
+            required=False,
+            max_length=50,
+        )
+        self.add_item(self.channel_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        comp = get_competition_config(interaction.guild_id)
+        val = str(self.channel_input.value or "").strip()
+        channel_id = None
+        if val:
+            m = re.search(r"<#(?P<id>\d{5,25})>", val)
+            if m:
+                channel_id = int(m.group("id"))
+            else:
+                m2 = re.search(r"\b\d{5,25}\b", val)
+                if m2:
+                    channel_id = int(m2.group(0))
+
+        comp["channel_id"] = channel_id
+        update_guild_config(interaction.guild_id, {"competition": comp})
+        await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
+
+
+class CompetitionSettingsView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=300)
+        self.guild_id = int(guild_id)
+
+    async def _refresh(self, interaction: discord.Interaction):
+        comp = get_competition_config(interaction.guild_id)
+        settings_embed = _build_competition_settings_embed(interaction.guild, comp)
+        preview_embed = build_competition_embed(interaction.guild, comp)
+        await interaction.response.edit_message(embeds=[settings_embed, preview_embed], view=self)
+
+    @discord.ui.button(label="Embed | إيمبد", style=discord.ButtonStyle.primary, row=0)
+    async def embed_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        await interaction.response.send_modal(CompetitionEmbedModal(interaction.guild_id))
+
+    @discord.ui.button(label="Reaction Role | رتبة", style=discord.ButtonStyle.primary, row=0)
+    async def role_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        await interaction.response.send_modal(CompetitionReactionRoleModal(interaction.guild_id))
+
+    @discord.ui.button(label="Channel | قناة", style=discord.ButtonStyle.secondary, row=0)
+    async def channel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+        await interaction.response.send_modal(CompetitionChannelModal(interaction.guild_id))
+
+    @discord.ui.button(label="Send | إرسال", style=discord.ButtonStyle.success, row=1)
+    async def send_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+
+        comp = get_competition_config(interaction.guild_id)
+        target_channel = interaction.channel
+        if comp.get("channel_id"):
+            ch = interaction.guild.get_channel(int(comp.get("channel_id")))
+            if ch:
+                target_channel = ch
+
+        embed = build_competition_embed(interaction.guild, comp)
+        msg = await target_channel.send(embed=embed)
+        try:
+            await msg.add_reaction(str(comp.get("reaction_emoji") or "🎯"))
+        except Exception:
+            pass
+
+        comp["message_id"] = msg.id
+        comp["channel_id"] = msg.channel.id
+        update_guild_config(interaction.guild_id, {"competition": comp})
+
+        await interaction.response.send_message("✅ Sent | تم الإرسال", ephemeral=True)
+
+    @discord.ui.button(label="Refresh | تحديث", style=discord.ButtonStyle.secondary, row=1)
+    async def refresh_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._refresh(interaction)
+
+
+@bot.tree.command(name="competition_panel", description="Competition panel | لوحة المسابقة")
+async def competition_panel(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+    comp = get_competition_config(interaction.guild_id)
+    settings_embed = _build_competition_settings_embed(interaction.guild, comp)
+    preview_embed = build_competition_embed(interaction.guild, comp)
+    await interaction.response.send_message(
+        embeds=[settings_embed, preview_embed],
+        view=CompetitionSettingsView(interaction.guild_id),
+        ephemeral=True,
+    )
+
+
+@bot.tree.command(name="competition", description="Post competition embed | نشر المسابقة")
+async def competition(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.manage_guild:
+        return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+
+    comp = get_competition_config(interaction.guild_id)
+    target_channel = interaction.channel
+    if comp.get("channel_id"):
+        ch = interaction.guild.get_channel(int(comp.get("channel_id")))
+        if ch:
+            target_channel = ch
+
+    embed = build_competition_embed(interaction.guild, comp)
+    msg = await target_channel.send(embed=embed)
+    try:
+        await msg.add_reaction(str(comp.get("reaction_emoji") or "🎯"))
+    except Exception:
+        pass
+
+    comp["message_id"] = msg.id
+    comp["channel_id"] = msg.channel.id
+    update_guild_config(interaction.guild_id, {"competition": comp})
+
+    await interaction.response.send_message("✅ Sent | تم الإرسال", ephemeral=True)
 
 
 # ---------------- Voice 24/7 (AFK) ----------------
@@ -6708,6 +7078,39 @@ async def on_message(message):
                     await message.channel.send(f"❌ Error | خطأ: {str(e)}", delete_after=5)
     
     await bot.process_commands(message)
+
+
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    try:
+        if payload.user_id == bot.user.id:
+            return
+        if not payload.guild_id:
+            return
+
+        comp = get_competition_config(payload.guild_id)
+        if not comp.get("message_id") or not comp.get("role_id"):
+            return
+        if int(payload.message_id) != int(comp.get("message_id")):
+            return
+        if not _competition_emoji_matches(comp.get("reaction_emoji"), payload.emoji):
+            return
+
+        guild = bot.get_guild(payload.guild_id)
+        if not guild:
+            return
+
+        role = guild.get_role(int(comp.get("role_id")))
+        if not role:
+            return
+
+        member = guild.get_member(payload.user_id)
+        if not member or member.bot:
+            return
+
+        await member.add_roles(role, reason="Competition reaction role")
+    except Exception:
+        pass
 
 class ModSettingsView(discord.ui.View):
     def __init__(self):
