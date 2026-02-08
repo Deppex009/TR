@@ -7206,6 +7206,44 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     except Exception:
         pass
 
+
+@bot.event
+async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+    try:
+        if payload.user_id == bot.user.id:
+            return
+        if not payload.guild_id:
+            return
+
+        comp = get_competition_config(payload.guild_id)
+        if not comp.get("message_id") or not comp.get("role_id"):
+            return
+        if int(payload.message_id) != int(comp.get("message_id")):
+            return
+        if not _competition_emoji_matches(comp.get("reaction_emoji"), payload.emoji):
+            return
+
+        guild = bot.get_guild(payload.guild_id)
+        if not guild:
+            return
+
+        role = guild.get_role(int(comp.get("role_id")))
+        if not role:
+            return
+
+        member = guild.get_member(payload.user_id)
+        if not member:
+            try:
+                member = await guild.fetch_member(payload.user_id)
+            except Exception:
+                return
+        if not member or member.bot:
+            return
+
+        await member.remove_roles(role, reason="Competition reaction role removed")
+    except Exception:
+        pass
+
 class ModSettingsView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
