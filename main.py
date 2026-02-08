@@ -488,6 +488,40 @@ def _coerce_component_emoji(value):
     return raw
 
 
+def _normalize_image_url(url: str | None) -> str:
+    if not url:
+        return ""
+    raw = str(url).strip()
+    if not raw:
+        return ""
+    if raw.startswith("<") and raw.endswith(">"):
+        raw = raw[1:-1].strip()
+    if raw.startswith("//"):
+        raw = "https:" + raw
+    if raw.startswith("cdn.discordapp.com") or raw.startswith("media.discordapp.net"):
+        raw = "https://" + raw
+    if not (raw.startswith("http://") or raw.startswith("https://")):
+        return ""
+    return raw
+
+
+def _format_display_emoji(guild: discord.Guild, raw: str | None) -> str:
+    if not raw:
+        return ""
+    coerced = _coerce_component_emoji(raw)
+    if isinstance(coerced, discord.PartialEmoji):
+        return str(coerced)
+    if isinstance(coerced, str) and coerced:
+        return coerced
+    try:
+        match = discord.utils.get(guild.emojis, name=str(raw))
+        if match:
+            return str(match)
+    except Exception:
+        pass
+    return str(raw)
+
+
 def _parse_bool_text(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
@@ -1408,8 +1442,9 @@ def build_giveaway_embed(
         description="\n".join(lines),
         color=parse_color(giveaway_cfg.get("embed_color", "#5865F2")),
     )
-    if giveaway_cfg.get("image_url"):
-        embed.set_image(url=str(giveaway_cfg.get("image_url")))
+    image_url = _normalize_image_url(giveaway_cfg.get("image_url"))
+    if image_url:
+        embed.set_image(url=image_url)
     embed.set_footer(text=guild.name)
     return embed
 
@@ -1422,7 +1457,7 @@ def build_competition_embed(guild: discord.Guild, comp: dict) -> discord.Embed:
         if role:
             role_mention = role.mention
 
-    emoji = str(comp.get("reaction_emoji") or "🎯")
+    emoji = _format_display_emoji(guild, str(comp.get("reaction_emoji") or "🎯"))
     title = str(comp.get("title") or "🏆 Competition | مسابقة")
     description_template = str(comp.get("description") or "")
     description = _safe_format(description_template, emoji=emoji, role=role_mention)
@@ -1433,7 +1468,7 @@ def build_competition_embed(guild: discord.Guild, comp: dict) -> discord.Embed:
         color=parse_color(comp.get("embed_color", "#5865F2")),
     )
 
-    image_url = str(comp.get("image_url") or "").strip()
+    image_url = _normalize_image_url(comp.get("image_url"))
     if image_url:
         embed.set_image(url=image_url)
 
@@ -2162,8 +2197,8 @@ def _competition_emoji_matches(stored: str, payload_emoji: discord.PartialEmoji)
         if not stored:
             return False
         if payload_emoji.id:
-            return stored in {str(payload_emoji), str(payload_emoji.id)}
-        return stored == str(payload_emoji)
+            return stored in {str(payload_emoji), str(payload_emoji.id), str(payload_emoji.name)}
+        return stored in {str(payload_emoji), str(payload_emoji.name)}
     except Exception:
         return False
 
@@ -2217,7 +2252,7 @@ class CompetitionEmbedModal(discord.ui.Modal):
         comp["title"] = str(self.title_input.value or "")
         comp["description"] = str(self.desc_input.value or "")
         comp["embed_color"] = str(self.color_input.value or "")
-        comp["image_url"] = str(self.image_input.value or "")
+        comp["image_url"] = _normalize_image_url(self.image_input.value)
         comp["footer_text"] = str(self.footer_input.value or "")
         update_guild_config(interaction.guild_id, {"competition": comp})
         await interaction.response.send_message("✅ Updated | تم التحديث", ephemeral=True)
@@ -2247,7 +2282,18 @@ class CompetitionReactionRoleModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         comp = get_competition_config(interaction.guild_id)
-        comp["reaction_emoji"] = str(self.emoji_input.value or "").strip() or "🎯"
+        raw_emoji = str(self.emoji_input.value or "").strip()
+        if raw_emoji:
+            coerced = _coerce_component_emoji(raw_emoji)
+            if isinstance(coerced, discord.PartialEmoji):
+                comp["reaction_emoji"] = str(coerced)
+            elif isinstance(coerced, str) and coerced:
+                comp["reaction_emoji"] = coerced
+            else:
+                match = discord.utils.get(interaction.guild.emojis, name=raw_emoji)
+                comp["reaction_emoji"] = str(match) if match else raw_emoji
+        else:
+            comp["reaction_emoji"] = "🎯"
 
         raw_role = str(self.role_input.value or "").strip()
         role_id = None
@@ -2325,6 +2371,40 @@ class CompetitionSettingsView(discord.ui.View):
         if not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
         await interaction.response.send_modal(CompetitionChannelModal(interaction.guild_id))
+
+    @discord.ui.button(label="Upload Image | رفع", style=discord.ButtonStyle.success, row=0)
+    async def upload_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message("❌ Manage Server required | تحتاج إدارة السيرفر", ephemeral=True)
+
+        await interaction.response.send_message(
+            "📷 Send an image **now** in this channel (60s) | ارسل الصورة الآن في نفس القناة (60 ثانية)",
+            ephemeral=True,
+        )
+
+        def check(msg: discord.Message):
+            return (
+                msg.guild
+                and msg.guild.id == interaction.guild_id
+                and msg.author.id == interaction.user.id
+                and msg.channel.id == interaction.channel_id
+                and msg.attachments
+            )
+
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=60)
+        except asyncio.TimeoutError:
+            return
+
+        att = msg.attachments[0]
+        comp = get_competition_config(interaction.guild_id)
+        comp["image_url"] = _normalize_image_url(att.url)
+        update_guild_config(interaction.guild_id, {"competition": comp})
+
+        try:
+            await interaction.followup.send("✅ Image updated | تم تحديث الصورة", ephemeral=True)
+        except Exception:
+            pass
 
     @discord.ui.button(label="Send | إرسال", style=discord.ButtonStyle.success, row=1)
     async def send_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
