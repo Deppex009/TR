@@ -5911,11 +5911,11 @@ def get_mod_config(guild_id):
         "timeout_dm": "تم إعطاؤك مهلة (Timeout) في **{server}**.\nالمدة: {duration}\nالسبب: {reason}\n\nYou have been timed out in **{server}**.\nDuration: {duration}\nReason: {reason}",
         "untimeout_dm": "تم إزالة المهلة عنك في **{server}**.\nالسبب: {reason}\n\nYour timeout has been removed in **{server}**.\nReason: {reason}",
         "ban_log": "🔨 **User Banned | تم الحظر**",
-        "unban_log": "✅ **User Unbanned | تم فك الحظر**",
+        "unban_log": "**User Unbanned | تم فك الحظر**",
         "kick_log": "👢 **User Kicked | تم الطرد**",
         "warn_log": "⚠️ **User Warned | تم التحذير**",
         "timeout_log": "⏱️ **User Timed Out | تم الإعطاء مهلة**",
-        "untimeout_log": "✅ **Timeout Removed | تم إزالة المهلة**",
+        "untimeout_log": "**Timeout Removed | تم إزالة المهلة**",
         "channel_locked": "🔒 **Channel Locked | تم قفل القناة**",
         "channel_unlocked": "🔓 **Channel Unlocked | تم فتح القناة**",
     }
@@ -5956,11 +5956,11 @@ def build_mod_dm_embed(action, guild, moderator, reason, duration=None):
 
     titles = {
         "ban": "🔨 Banned | تم الحظر",
-        "unban": "✅ Unbanned | تم فك الحظر",
+        "unban": "Unbanned | تم فك الحظر",
         "kick": "👢 Kicked | تم الطرد",
         "warn": "⚠️ Warning | تحذير",
         "timeout": "⏱️ Timeout | مهلة",
-        "untimeout": "✅ Timeout Removed | إزالة المهلة",
+        "untimeout": "Timeout Removed | إزالة المهلة",
         "dm": "✉️ Message | رسالة",
         "say": "📣 Announcement | إعلان",
     }
@@ -6144,7 +6144,7 @@ async def unban_user(interaction: discord.Interaction, user_id: str, reason: str
         await interaction.guild.unban(banned_user, reason=reason)
 
         embed = discord.Embed(
-            title="✅ تم فك الحظر | User Unbanned",
+            title="تم فك الحظر | User Unbanned",
             description=f"<@{banned_user.id}> **تم فك الحظر عنه**\n**السبب:** {reason}\n\n<@{banned_user.id}> **has been unbanned**\n**Reason:** {reason}",
             color=discord.Color.green(),
         )
@@ -6294,7 +6294,7 @@ async def untimeout_user(interaction: discord.Interaction, user: discord.Member 
         await user.timeout(None, reason=reason)
 
         embed = discord.Embed(
-            title="✅ تم إزالة المهلة | Timeout Removed",
+            title="تم إزالة المهلة | Timeout Removed",
             description=f"{user.mention} **تم إزالة المهلة عنه**\n**السبب:** {reason}\n\n{user.mention} **timeout has been removed**\n**Reason:** {reason}",
             color=discord.Color.green(),
         )
@@ -7185,15 +7185,39 @@ async def on_message(message):
                             continue
                         
                         target = message.mentions[0] if message.mentions else None
-                        
+
+                        bot_member = message.guild.me or message.guild.get_member(bot.user.id)
+
+                        def _bot_has_perm(perm_name: str) -> bool:
+                            try:
+                                return bool(getattr(bot_member.guild_permissions, perm_name, False))
+                            except Exception:
+                                return False
+
                         # Remove mention from content to get reason/duration
-                        rest = content.replace(f"<@{target.id}>", "").replace(f"<@!{target.id}>", "").strip()
+                        if target is not None:
+                            rest = content.replace(f"<@{target.id}>", "").replace(f"<@!{target.id}>", "").strip()
+                        else:
+                            rest = content.strip()
                         
                         if action == "ban":
+                            if not _bot_has_perm("ban_members"):
+                                await message.channel.send("❌ Bot missing Ban Members | البوت لا يملك صلاحية الحظر")
+                                continue
+                            if target and message.guild.owner_id == target.id:
+                                await message.channel.send("❌ Can't ban server owner | لا يمكن حظر مالك السيرفر")
+                                continue
+                            if target and bot_member and target.top_role >= bot_member.top_role:
+                                await message.channel.send("❌ Bot role too low | رتبة البوت أقل من العضو")
+                                continue
                             reason = rest if rest else "No reason provided"
                             
                             # Ban user
-                            await target.ban(reason=reason)
+                            try:
+                                await target.ban(reason=reason)
+                            except discord.Forbidden:
+                                await message.channel.send("❌ Missing permissions to ban this user | صلاحيات غير كافية")
+                                continue
                             
                             # Send bilingual response
                             embed = discord.Embed(
@@ -7214,10 +7238,23 @@ async def on_message(message):
                             await send_mod_log(message.guild, "ban", message.author, target, reason)
                         
                         elif action == "kick":
+                            if not _bot_has_perm("kick_members"):
+                                await message.channel.send("❌ Bot missing Kick Members | البوت لا يملك صلاحية الطرد")
+                                continue
+                            if target and message.guild.owner_id == target.id:
+                                await message.channel.send("❌ Can't kick server owner | لا يمكن طرد مالك السيرفر")
+                                continue
+                            if target and bot_member and target.top_role >= bot_member.top_role:
+                                await message.channel.send("❌ Bot role too low | رتبة البوت أقل من العضو")
+                                continue
                             reason = rest if rest else "No reason provided"
                             
                             # Kick user
-                            await target.kick(reason=reason)
+                            try:
+                                await target.kick(reason=reason)
+                            except discord.Forbidden:
+                                await message.channel.send("❌ Missing permissions to kick this user | صلاحيات غير كافية")
+                                continue
                             
                             # Send bilingual response
                             embed = discord.Embed(
@@ -7259,6 +7296,15 @@ async def on_message(message):
                             await send_mod_log(message.guild, "warn", message.author, target, reason)
                         
                         elif action == "timeout":
+                            if not _bot_has_perm("moderate_members"):
+                                await message.channel.send("❌ Bot missing Moderate Members | البوت لا يملك صلاحية المهلة")
+                                continue
+                            if target and message.guild.owner_id == target.id:
+                                await message.channel.send("❌ Can't timeout server owner | لا يمكن إعطاء مهلة لمالك السيرفر")
+                                continue
+                            if target and bot_member and target.top_role >= bot_member.top_role:
+                                await message.channel.send("❌ Bot role too low | رتبة البوت أقل من العضو")
+                                continue
                             # Parse duration and reason
                             parts = rest.split(" ", 1)
                             duration_str = parts[0] if parts else "10m"
@@ -7287,7 +7333,11 @@ async def on_message(message):
                                 duration_minutes = 10
                             
                             # Timeout user
-                            await target.timeout(discord.utils.utcnow() + duration, reason=reason)
+                            try:
+                                await target.timeout(discord.utils.utcnow() + duration, reason=reason)
+                            except discord.Forbidden:
+                                await message.channel.send("❌ Missing permissions to timeout this user | صلاحيات غير كافية")
+                                continue
                             
                             # Send bilingual response
                             embed = discord.Embed(
@@ -7308,6 +7358,9 @@ async def on_message(message):
                             await send_mod_log(message.guild, "timeout", message.author, target, reason, duration_str)
                         
                         elif action == "unban":
+                            if not _bot_has_perm("ban_members"):
+                                await message.channel.send("❌ Bot missing Ban Members | البوت لا يملك صلاحية فك الحظر")
+                                continue
                             reason = "No reason provided"
                             if content:
                                 pieces = content.split(" ", 1)
@@ -7323,9 +7376,13 @@ async def on_message(message):
                                 await notify.delete()
                                 continue
 
-                            await message.guild.unban(banned_user, reason=reason)
+                            try:
+                                await message.guild.unban(banned_user, reason=reason)
+                            except discord.Forbidden:
+                                await message.channel.send("❌ Missing permissions to unban this user | صلاحيات غير كافية")
+                                continue
                             embed = discord.Embed(
-                                title="✅ تم فك الحظر | User Unbanned",
+                                title="تم فك الحظر | User Unbanned",
                                 description=f"<@{banned_user.id}> **تم فك الحظر عنه**\n**السبب:** {reason}\n\n<@{banned_user.id}> **has been unbanned**\n**Reason:** {reason}",
                                 color=discord.Color.green(),
                             )
@@ -7341,13 +7398,26 @@ async def on_message(message):
                             await send_mod_log(message.guild, "unban", message.author, banned_user, reason)
 
                         elif action == "untimeout":
+                            if not _bot_has_perm("moderate_members"):
+                                await message.channel.send("❌ Bot missing Moderate Members | البوت لا يملك صلاحية إزالة المهلة")
+                                continue
+                            if target and message.guild.owner_id == target.id:
+                                await message.channel.send("❌ Can't untimeout server owner | لا يمكن إزالة المهلة عن مالك السيرفر")
+                                continue
+                            if target and bot_member and target.top_role >= bot_member.top_role:
+                                await message.channel.send("❌ Bot role too low | رتبة البوت أقل من العضو")
+                                continue
                             reason = rest if rest else "No reason provided"
                             if not target:
                                 continue
 
-                            await target.timeout(None, reason=reason)
+                            try:
+                                await target.timeout(None, reason=reason)
+                            except discord.Forbidden:
+                                await message.channel.send("❌ Missing permissions to untimeout this user | صلاحيات غير كافية")
+                                continue
                             embed = discord.Embed(
-                                title="✅ تم إزالة المهلة | Timeout Removed",
+                                title="تم إزالة المهلة | Timeout Removed",
                                 description=f"{target.mention} **تم إزالة المهلة عنه**\n**السبب:** {reason}\n\n{target.mention} **timeout has been removed**\n**Reason:** {reason}",
                                 color=discord.Color.green(),
                             )
@@ -7455,7 +7525,7 @@ class ModSettingsView(discord.ui.View):
         modal = BanSettingsModal()
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Unban", emoji="✅", style=discord.ButtonStyle.success, row=0, custom_id="modsetup:unban")
+    @discord.ui.button(label="Unban", style=discord.ButtonStyle.success, row=0, custom_id="modsetup:unban")
     async def unban_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = UnbanSettingsModal()
         await interaction.response.send_modal(modal)
@@ -7475,7 +7545,7 @@ class ModSettingsView(discord.ui.View):
         modal = TimeoutSettingsModal()
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Untimeout", emoji="✅", style=discord.ButtonStyle.success, row=1, custom_id="modsetup:untimeout")
+    @discord.ui.button(label="Untimeout", style=discord.ButtonStyle.success, row=1, custom_id="modsetup:untimeout")
     async def untimeout_settings(self, interaction: discord.Interaction, button: discord.ui.Button):
         modal = UntimeoutSettingsModal()
         await interaction.response.send_modal(modal)
@@ -7550,7 +7620,7 @@ class BanSettingsModal(discord.ui.Modal):
 
 class UnbanSettingsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="✅ Unban | فك حظر")
+        super().__init__(title="Unban | فك حظر")
 
         self.dm_msg = discord.ui.TextInput(
             label="DM Msg | رسالة",
@@ -7562,7 +7632,7 @@ class UnbanSettingsModal(discord.ui.Modal):
 
         self.log_msg = discord.ui.TextInput(
             label="Log Title | عنوان السجل",
-            placeholder="✅ **User Unbanned**",
+            placeholder="**User Unbanned**",
             style=discord.TextStyle.short,
             required=False,
             max_length=120,
@@ -7600,7 +7670,7 @@ class UnbanSettingsModal(discord.ui.Modal):
                 }
 
             update_guild_config(interaction.guild_id, guild_cfg)
-            msg = "✅ Unban settings updated!"
+            msg = "Unban settings updated!"
             if self.shortcut.value:
                 msg += (
                     f"\n**Shortcut:** Type `{self.shortcut.value}` + user_id"
@@ -7760,7 +7830,7 @@ class TimeoutSettingsModal(discord.ui.Modal):
 
 class UntimeoutSettingsModal(discord.ui.Modal):
     def __init__(self):
-        super().__init__(title="✅ Untimeout | إزالة المهلة")
+        super().__init__(title="Untimeout | إزالة المهلة")
 
         self.dm_msg = discord.ui.TextInput(
             label="DM Msg | رسالة",
@@ -7772,7 +7842,7 @@ class UntimeoutSettingsModal(discord.ui.Modal):
 
         self.log_msg = discord.ui.TextInput(
             label="Log Title | عنوان السجل",
-            placeholder="✅ **Timeout Removed**",
+            placeholder="**Timeout Removed**",
             style=discord.TextStyle.short,
             required=False,
             max_length=120,
@@ -7810,7 +7880,7 @@ class UntimeoutSettingsModal(discord.ui.Modal):
                 }
 
             update_guild_config(interaction.guild_id, guild_cfg)
-            msg = "✅ Untimeout settings updated | تم تحديث إزالة المهلة"
+            msg = "Untimeout settings updated | تم تحديث إزالة المهلة"
             if self.shortcut.value:
                 msg += (
                     f"\n**Shortcut | اختصار:** `{self.shortcut.value}` + @user"
@@ -8076,11 +8146,11 @@ async def mod_setup(interaction: discord.Interaction):
                 "**Configure actions + shortcuts (English/Arabic):**\n"
                 "**إعداد الأوامر + الاختصارات (عربي/إنجليزي):**\n\n"
                 "🔨 **Ban | حظر** - Message & shortcut | رسالة + اختصار\n"
-                "✅ **Unban | فك حظر** - Message & shortcut | رسالة + اختصار\n"
+                "**Unban | فك حظر** - Message & shortcut | رسالة + اختصار\n"
                 "👢 **Kick | طرد** - Message & shortcut | رسالة + اختصار\n"
                 "⚠️ **Warn | تحذير** - Message & shortcut | رسالة + اختصار\n"
                 "⏱️ **Timeout | مهلة** - Message & shortcut | رسالة + اختصار\n"
-                "✅ **Untimeout | إزالة مهلة** - Message & shortcut | رسالة + اختصار\n"
+                "**Untimeout | إزالة مهلة** - Message & shortcut | رسالة + اختصار\n"
                 "🧹 **Clear | مسح** - Shortcut + default amount | اختصار + رقم افتراضي\n"
                 "🔒 **Lock/Unlock | قفل/فتح** - Shortcuts | اختصارات\n"
                 "🛡️ **Access Role | صلاحية** - Who can use mod system | من يستطيع استخدام الإشراف\n"
