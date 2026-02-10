@@ -1407,17 +1407,25 @@ def build_giveaway_embed(
     host_line = _safe_format(giveaway_cfg.get("host_line_template"), host=host_mention)
 
     if ended:
+        ended_template = str(giveaway_cfg.get("ended_line_template") or "")
         end_line = _safe_format(
-            giveaway_cfg.get("ended_line_template"),
+            ended_template,
             winners=winners_count,
             ended_at=ended_at,
         )
+        if "{ended_at}" not in ended_template:
+            extra = f"Ended: {ended_at} | انتهى: {ended_at}"
+            end_line = f"{end_line}\n{extra}" if str(end_line).strip() else extra
     else:
+        end_template = str(giveaway_cfg.get("end_line_template") or "")
         end_line = _safe_format(
-            giveaway_cfg.get("end_line_template"),
+            end_template,
             winners=winners_count,
             ends_at=ends_at,
         )
+        if "{ends_at}" not in end_template:
+            extra = f"Ends: {ends_at} | ينتهي: {ends_at}"
+            end_line = f"{end_line}\n{extra}" if str(end_line).strip() else extra
 
     lines: list[str] = []
     for line in (react_line, prize_line, host_line):
